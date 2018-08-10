@@ -1,0 +1,8 @@
+# files belonging to the testbench
+fifo_ram.vhd
+fifo.vhd
+std_logic_1164_additions.vhd
+sha_tb_pkg.vhd
+hash_one_clk_wrapper.vhd
+sha_tb_all_hls.vhd
+

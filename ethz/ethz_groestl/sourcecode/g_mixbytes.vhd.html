@@ -1,0 +1,118 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/g_mixbytes.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : One row of Mixbytes</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : g_mixbytes.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-21</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-03</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: This is 1/8th of the Mixbytes operation</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-21  1.0      kgf	Code copied from groestl code from the SHA2</FONT></I>
+<I><FONT COLOR=#808080>--                              implementations.</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> IEEE;
+<B>use</B> IEEE.std_logic_1164.all;
+
+<B>entity</B> g_mixbytes <B>is</B>
+  
+  <B>port</B> (
+    <FONT COLOR=#804040>InxDI</FONT>  : <B>in</B>  std_logic_vector(63 <B>downto</B> 0);
+    <FONT COLOR=#804040>OutxDO</FONT> : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+
+<B>end</B> g_mixbytes;
+
+<B>architecture</B> rtl <B>of</B> g_mixbytes <B>is</B>
+
+
+ <B>type</B> statearray  <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> std_logic_vector (7 <B>downto</B> 0);
+ <B>signal</B> <FONT COLOR=#804040>DxD</FONT> : statearray;               <I><FONT COLOR=#808080>-- ease of programming</FONT></I>
+ <I><FONT COLOR=#808080>-- result of each column </FONT></I>
+ <B>signal</B> <FONT COLOR=#804040>C1xD</FONT>, <FONT COLOR=#804040>C2xD</FONT>, <FONT COLOR=#804040>C3xD</FONT>, <FONT COLOR=#804040>C4xD</FONT>, <FONT COLOR=#804040>C5xD</FONT>, <FONT COLOR=#804040>C6xD</FONT>, <FONT COLOR=#804040>C7xD</FONT>, <FONT COLOR=#804040>C8xD</FONT> : std_logic_vector(7 <B>downto</B> 0);
+ <I><FONT COLOR=#808080>-- helping signals for complex columns </FONT></I>
+ <B>signal</B> <FONT COLOR=#804040>C41xD</FONT>, <FONT COLOR=#804040>C51xD</FONT>, <FONT COLOR=#804040>C71xD</FONT>, <FONT COLOR=#804040>C81xD</FONT> : std_logic_vector(7 <B>downto</B> 0);
+ 
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+  
+ <I><FONT COLOR=#808080>-- copy the input into the state array</FONT></I>
+ <I><FONT COLOR=#808080>-- we assume that the first element of the row is at the MSB</FONT></I>
+ <I><FONT COLOR=#808080>-- and the least significant on the LSB</FONT></I>
+  <FONT COLOR=#0000C0>gen_in</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+    <FONT COLOR=#804040>DxD</FONT>(i) <= <FONT COLOR=#804040>InxDI</FONT>( (7-i)*8 + 7 <B>downto</B> (7-i)*8);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>gen_in</FONT>;
+
+<I><FONT COLOR=#808080>-- multiply each column with entries of the row</FONT></I>
+    <I><FONT COLOR=#808080>-- x 02 </FONT></I>
+    <FONT COLOR=#804040>C1xD</FONT>  <=      <FONT COLOR=#804040>DxD</FONT>(0)(6 <B>downto</B> 0)&'0' <B>when</B> <FONT COLOR=#804040>DxD</FONT>(0)(7) = '0'
+             <B>else</B> <FONT COLOR=#804040>DxD</FONT>(0)(6 <B>downto</B> 0)&'0' <B>xor</B> x"1b";
+
+    <I><FONT COLOR=#808080>-- x 02</FONT></I>
+    <FONT COLOR=#804040>C2xD</FONT>  <=      <FONT COLOR=#804040>DxD</FONT>(1)(6 <B>downto</B> 0)&'0' <B>when</B> <FONT COLOR=#804040>DxD</FONT>(1)(7) = '0'
+             <B>else</B> <FONT COLOR=#804040>DxD</FONT>(1)(6 <B>downto</B> 0)&'0' <B>xor</B> x"1b";
+
+    <I><FONT COLOR=#808080>-- x 03</FONT></I>
+    <FONT COLOR=#804040>C3xD</FONT>  <=       (<FONT COLOR=#804040>DxD</FONT>(2)(6 <B>downto</B> 0)&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(2)  <B>when</B> <FONT COLOR=#804040>DxD</FONT>(2)(7) = '0'
+             <B>else</B> ((<FONT COLOR=#804040>DxD</FONT>(2)(6 <B>downto</B> 0)&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(2)) <B>xor</B> x"1b";
+
+    <I><FONT COLOR=#808080>-- x 04</FONT></I>
+    <FONT COLOR=#804040>C41xD</FONT>  <= <FONT COLOR=#804040>DxD</FONT>(3)(5 <B>downto</B> 0)&'0'&'0';
+    <FONT COLOR=#804040>C4xD</FONT>   <=      <FONT COLOR=#804040>C41xD</FONT>           <B>when</B> <FONT COLOR=#804040>DxD</FONT>(3)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(3)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C41xD</FONT> <B>xor</B> x"36" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(3)(7) = '1' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(3)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C41xD</FONT> <B>xor</B> x"1b" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(3)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(3)(6) = '1'
+              <B>else</B> <FONT COLOR=#804040>C41xD</FONT> <B>xor</B> x"2d";
+
+    <I><FONT COLOR=#808080>-- x 05</FONT></I>
+    <FONT COLOR=#804040>C51xD</FONT>  <= (<FONT COLOR=#804040>DxD</FONT>(4)(5 <B>downto</B> 0)&'0'&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(4);
+    <FONT COLOR=#804040>C5xD</FONT>   <=      <FONT COLOR=#804040>C51xD</FONT> <B>when</B> <FONT COLOR=#804040>DxD</FONT>(4)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(4)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C51xD</FONT> <B>xor</B> x"36" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(4)(7) = '1' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(4)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C51xD</FONT> <B>xor</B> x"1b" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(4)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(4)(6) = '1'
+              <B>else</B> <FONT COLOR=#804040>C51xD</FONT> <B>xor</B> x"2d";
+
+    <I><FONT COLOR=#808080>-- x 03</FONT></I>
+    <FONT COLOR=#804040>C6xD</FONT>  <=       (<FONT COLOR=#804040>DxD</FONT>(5)(6 <B>downto</B> 0)&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(5) <B>when</B> <FONT COLOR=#804040>DxD</FONT>(5)(7) = '0'
+             <B>else</B> ((<FONT COLOR=#804040>DxD</FONT>(5)(6 <B>downto</B> 0)&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(5)) <B>xor</B> x"1b";
+
+    <I><FONT COLOR=#808080>-- x 05</FONT></I>
+    <FONT COLOR=#804040>C71xD</FONT>  <= <FONT COLOR=#804040>DxD</FONT>((6))(5 <B>downto</B> 0)&'0'&'0' <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(6);
+    <FONT COLOR=#804040>C7xD</FONT>   <=      <FONT COLOR=#804040>C71xD</FONT> <B>when</B> <FONT COLOR=#804040>DxD</FONT>(6)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(6)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C71xD</FONT> <B>xor</B> x"36" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(6)(7) = '1' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(6)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C71xD</FONT> <B>xor</B> x"1b" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(6)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(6)(6) = '1'
+              <B>else</B> <FONT COLOR=#804040>C71xD</FONT> <B>xor</B> x"2d";
+
+    <I><FONT COLOR=#808080>-- x 07</FONT></I>
+    <FONT COLOR=#804040>C81xD</FONT>  <= (<FONT COLOR=#804040>DxD</FONT>(7)(6 <B>downto</B> 0)&'0') <B>xor</B> (<FONT COLOR=#804040>DxD</FONT>(7)(5 <B>downto</B> 0)&'0'&'0') <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(7);
+    <FONT COLOR=#804040>C8xD</FONT>   <=      <FONT COLOR=#804040>C81xD</FONT> <B>when</B> <FONT COLOR=#804040>DxD</FONT>(7)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(7)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C81xD</FONT> <B>xor</B> x"2d" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(7)(7) = '1' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(7)(6) = '0'
+              <B>else</B> <FONT COLOR=#804040>C81xD</FONT> <B>xor</B> x"1b" <B>when</B> <FONT COLOR=#804040>DxD</FONT>(7)(7) = '0' <B>and</B> <FONT COLOR=#804040>DxD</FONT>(7)(6) = '1'
+              <B>else</B> <FONT COLOR=#804040>C81xD</FONT> <B>xor</B> x"36";
+
+<I><FONT COLOR=#808080>-- Determine the output</FONT></I>
+ <FONT COLOR=#804040>OutxDO</FONT> <= <FONT COLOR=#804040>C1xD</FONT> <B>xor</B> <FONT COLOR=#804040>C2xD</FONT> <B>xor</B> <FONT COLOR=#804040>C3xD</FONT> <B>xor</B> <FONT COLOR=#804040>C4xD</FONT> <B>xor</B>
+           <FONT COLOR=#804040>C5xD</FONT> <B>xor</B> <FONT COLOR=#804040>C6xD</FONT> <B>xor</B> <FONT COLOR=#804040>C7xD</FONT> <B>xor</B> <FONT COLOR=#804040>C8xD</FONT>;
+
+
+
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

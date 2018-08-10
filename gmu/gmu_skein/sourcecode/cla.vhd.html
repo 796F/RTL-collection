@@ -1,0 +1,217 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/cla.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<I><FONT COLOR=#808080>-- carry look-ahead adder for 64-bits</FONT></I>
+
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+<I><FONT COLOR=#808080>---- CLA LEVEL 1</FONT></I>
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+
+<B>entity</B> cla_gen_4 <B>is</B> 
+	<B>port</B>(
+		p_in	:<B>in</B> std_logic_vector(3 <B>downto</B> 0);
+		g_in	:<B>in</B> std_logic_vector(3 <B>downto</B> 0);
+		c0		:<B>in</B> std_logic;
+		pg_out	:<B>out</B> std_logic;
+		gg_out	:<B>out</B> std_logic;
+		c_out	:<B>out</B> std_logic_vector(3 <B>downto</B> 0));
+<B>end</B> cla_gen_4;
+
+<B>architecture</B> struct <B>of</B> cla_gen_4 <B>is</B> 
+	<B>signal</B>	g		:std_logic_vector(3 <B>downto</B> 0); <I><FONT COLOR=#808080>-- generate</FONT></I>
+	<B>signal</B>	p		:std_logic_vector(3 <B>downto</B> 0); <I><FONT COLOR=#808080>-- propagate</FONT></I>
+	<B>signal</B>	c_wire	:std_logic_vector(3 <B>downto</B> 0); <I><FONT COLOR=#808080>-- propagate</FONT></I>
+
+<B>begin</B>
+	p <= p_in;
+	g <= g_in;
+	c_wire(3) <= g(2) <B>or</B> (g(1) <B>and</B> p(2)) <B>or</B> (g(0) <B>and</B> p(1) <B>and</B> p(2)) <B>or</B> (c_wire(0) <B>and</B> p(0) <B>and</B> p(1) <B>and</B> p(2));
+	c_wire(2) <= g(1) <B>or</B> (g(0) <B>and</B> p(1)) <B>or</B> (c_wire(0) <B>and</B> p(0) <B>and</B> p(1));
+	c_wire(1) <= g(0) <B>or</B> (c_wire(0) <B>and</B> p(0)); 
+	c_wire(0) <= c0;
+
+	c_out <= c_wire(3 <B>downto</B> 0);
+
+	pg_out <= p(0) <B>and</B> p(1)  <B>and</B> p(2) <B>and</B> p(3);
+	gg_out <= g(3) <B>or</B> (g(2) <B>and</B> p(3)) <B>or</B> (g(1) <B>and</B> p(2) <B>and</B> p(3)) <B>or</B> (g(0) <B>and</B> p(1) <B>and</B> p(2) <B>and</B> p(3));
+
+<B>end</B> struct;
+
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+<I><FONT COLOR=#808080>---- CLA LEVEL 2</FONT></I>
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> cla_gen_16 <B>is</B>
+	<B>port</B>(
+	p_in	:<B>in</B> std_logic_vector(15 <B>downto</B> 0);
+	g_in	:<B>in</B> std_logic_vector(15 <B>downto</B> 0);
+	c0		:<B>in</B> std_logic;
+	pg_out	:<B>out</B> std_logic;
+	gg_out	:<B>out</B> std_logic;
+	c_out	:<B>out</B> std_logic_vector(15 <B>downto</B> 0));
+<B>end</B> cla_gen_16;
+
+<B>architecture</B> struct <B>of</B> cla_gen_16 <B>is</B> 
+	<B>signal</B> c_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> pg_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> gg_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> pg_new	:std_logic;
+	<B>signal</B> gg_new	:std_logic;
+	<B>signal</B> cc_out	:std_logic_vector(15 <B>downto</B> 0);
+<B>begin</B>
+
+	<FONT COLOR=#0000C0>cla_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+		cla: <B>entity</B> work.cla_gen_4(struct) <B>port</B> <B>map</B> (p_in=>p_in(4*i+3 <B>downto</B> 4*i), g_in=>g_in(4*i+3 <B>downto</B> 4*i), c0=>c_wire(i), pg_out=>pg_wire(i), gg_out=>gg_wire(i), c_out=>cc_out(4*i+3 <B>downto</B> 4*i));
+	<B>end</B> <B>generate</B>;
+
+	cla_5: 	<B>entity</B> work.cla_gen_4(struct) <B>port</B> <B>map</B> (p_in=>pg_wire, g_in=>gg_wire, c0=>c0, pg_out=>pg_new, gg_out=>gg_new, c_out=>c_wire);
+	
+	gg_out <= gg_new;
+	pg_out <= pg_new;
+
+	c_out <=  cc_out;
+
+<B>end</B> struct;
+
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+<I><FONT COLOR=#808080>---- CLA 16</FONT></I>
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> cla_16 <B>is</B>
+	<B>port</B>(
+		a		: <B>in</B> std_logic_vector(15 <B>downto</B> 0);
+		b		: <B>in</B> std_logic_vector(15 <B>downto</B> 0);
+		s		: <B>out</B> std_logic_vector(15 <B>downto</B> 0));
+<B>end</B> cla_16;
+
+<B>architecture</B> struct <B>of</B> cla_16 <B>is</B>  
+	<B>signal</B> c0 		: std_logic;
+	<B>signal</B> p_in		:std_logic_vector(15 <B>downto</B> 0);
+	<B>signal</B> g_in		:std_logic_vector(15 <B>downto</B> 0);
+	<B>signal</B> c_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> pg_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> gg_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> pg_new	:std_logic;
+	<B>signal</B> gg_new	:std_logic;
+	<B>signal</B> cc_out	:std_logic_vector(15 <B>downto</B> 0);
+<B>begin</B>
+	c0 <= '0';
+	p_in <= a <B>xor</B> b;
+	g_in <= a <B>and</B> b;
+	
+	<FONT COLOR=#0000C0>cla_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+		cla: <B>entity</B> work.cla_gen_4(struct) <B>port</B> <B>map</B> (p_in=>p_in(4*i+3 <B>downto</B> 4*i), g_in=>g_in(4*i+3 <B>downto</B> 4*i), c0=>c_wire(i), pg_out=>pg_wire(i), gg_out=>gg_wire(i), c_out=>cc_out(4*i+3 <B>downto</B> 4*i));
+	<B>end</B> <B>generate</B>;
+
+	cla_5: 	<B>entity</B> work.cla_gen_4(struct) <B>port</B> <B>map</B> (p_in=>pg_wire, g_in=>gg_wire, c0=>c0, pg_out=>pg_new, gg_out=>gg_new, c_out=>c_wire);
+	
+	s <= p_in <B>xor</B> cc_out;
+<B>end</B> struct;
+
+
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+<I><FONT COLOR=#808080>---- CLA 32</FONT></I>
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> cla_32 <B>is</B> 
+	<B>port</B>(
+		a	:<B>in</B> std_logic_vector(31 <B>downto</B> 0);
+		b	:<B>in</B> std_logic_vector(31 <B>downto</B> 0);
+		s	:<B>out</B> std_logic_vector(31 <B>downto</B> 0));
+<B>end</B> cla_32;
+
+<B>architecture</B> struct <B>of</B> cla_32 <B>is</B> 
+
+	<B>signal</B> c_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> p_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> g_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> c_sum	:std_logic_vector(31 <B>downto</B> 0);
+	<B>signal</B> p_in		:std_logic_vector(31 <B>downto</B> 0);
+	<B>signal</B> g_in		:std_logic_vector(31 <B>downto</B> 0);
+	<B>signal</B> c0 		:std_logic;
+	<B>signal</B> pg_out	:std_logic;
+	<B>signal</B> gg_out	:std_logic;
+
+
+<B>begin</B>
+	c0 <='0';
+	p_in <= a <B>xor</B> b;
+	g_in <= a <B>and</B> b;
+
+	<FONT COLOR=#0000C0>cla_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 1 <B>generate</B> 
+		cla_16	: 		<B>entity</B> work.cla_gen_16(struct) 	<B>port</B> <B>map</B> (p_in=>p_in(16*i+15 <B>downto</B> 16*i), g_in=>g_in(16*i+15 <B>downto</B> 16*i), c0=>c_wire(i), pg_out=>p_wire(i), gg_out=>g_wire(i),  c_out=>c_sum(16*i+15 <B>downto</B> 16*i));
+	<B>end</B> <B>generate</B>; 
+
+	cla_64	:		<B>entity</B> work.cla_gen_4(struct)	<B>port</B> <B>map</B> (p_in=>p_wire, g_in=>g_wire, c0=>c0, pg_out=>pg_out, gg_out=>gg_out, c_out=>c_wire);
+
+	s <= p_in <B>xor</B> c_sum;
+<B>end</B> struct;
+
+
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+<I><FONT COLOR=#808080>---- CLA 64</FONT></I>
+<I><FONT COLOR=#808080>---------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> cla_64 <B>is</B> 
+	<B>port</B>(
+		a	:<B>in</B> std_logic_vector(63 <B>downto</B> 0);
+		b	:<B>in</B> std_logic_vector(63 <B>downto</B> 0);
+		s	:<B>out</B> std_logic_vector(63 <B>downto</B> 0));
+<B>end</B> cla_64;
+
+<B>architecture</B> struct <B>of</B> cla_64 <B>is</B> 
+
+	<B>signal</B> c_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> p_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> g_wire	:std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> c_sum	:std_logic_vector(63 <B>downto</B> 0);
+	<B>signal</B> p_in		:std_logic_vector(63 <B>downto</B> 0);
+	<B>signal</B> g_in		:std_logic_vector(63 <B>downto</B> 0);
+	<B>signal</B> c0 		:std_logic;
+	<B>signal</B>	pg_out	:std_logic;
+	<B>signal</B>	gg_out	:std_logic;
+<B>begin</B>
+	c0 <='0';
+	p_in <= a <B>xor</B> b;
+	g_in <= a <B>and</B> b;
+
+	<FONT COLOR=#0000C0>cla_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B> 
+		cla_16	: 		<B>entity</B> work.cla_gen_16(struct) 	<B>port</B> <B>map</B> (p_in=>p_in(16*i+15 <B>downto</B> 16*i), g_in=>g_in(16*i+15 <B>downto</B> 16*i), c0=>c_wire(i), pg_out=>p_wire(i), gg_out=>g_wire(i),  c_out=>c_sum(16*i+15 <B>downto</B> 16*i));
+	<B>end</B> <B>generate</B>; 
+
+	cla_64	:		<B>entity</B> work.cla_gen_4(struct)	<B>port</B> <B>map</B> (p_in=>p_wire, g_in=>g_wire, c0=>c0, pg_out=>pg_out, gg_out=>gg_out, c_out=>c_wire);
+
+	s <= p_in <B>xor</B> c_sum;
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

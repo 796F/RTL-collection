@@ -1,0 +1,24 @@
+<HTML>
+<TITLE>
+ gmu_jh/synopsys/scripts/wireload.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080>## set the wireload model from encounter</FONT></I>
+<I><FONT COLOR=#808080>## this could be much better</FONT></I>
+
+<I><FONT COLOR=#808080>## read in the wireload library</FONT></I>
+<B><FONT COLOR=008000>read_lib</FONT></B> ../../shabziger/synopsys/encounter_wireload.lib
+
+<I><FONT COLOR=#808080># there are sopme more levels here..  but  I am not sure what is what ?? </FONT></I>
+set_wire_load_mode top
+<B><FONT COLOR=008000>current_design</FONT></B> <I><FONT COLOR=0000FF>${top_block}</FONT></I>
+<B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> gmu_jh_top.top.i_gmu_jh_flat
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

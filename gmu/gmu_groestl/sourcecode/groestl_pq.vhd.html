@@ -1,0 +1,187 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/groestl_pq.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.groestl_pkg.all;
+
+<I><FONT COLOR=#808080>-- possible generics values: hs = {GROESTL_DATA_SIZE_SMALL, GROESTL_DATA_SIZE_BIG}</FONT></I>
+<I><FONT COLOR=#808080>-- rom_style = {DISTRIBUTED, COMBINATIONAL}</FONT></I>
+<I><FONT COLOR=#808080>-- all combinations are allowed </FONT></I>
+
+<B>entity</B> groestl_pq <B>is</B>
+<B>generic</B> (n:integer := GROESTL_DATA_SIZE_SMALL; rom_style : integer := DISTRIBUTED);
+<B>port</B>( 
+	clk				: <B>in</B> std_logic;
+	rst				: <B>in</B> std_logic;
+	p_mode			: <B>in</B> std_logic;	
+	round			: <B>in</B> std_logic_vector(7 <B>downto</B> 0);
+	input 			: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+   	output 			: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> groestl_pq;
+  		 
+<B>architecture</B> round3_pipelined <B>of</B> groestl_pq <B>is</B>
+
+<B>signal</B>	after_subbyte		: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B>	addcons			: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B>	after_reg		: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B>	after_shiftrow		: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> after_srp	: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> after_srq	: std_logic_vector(n-1 <B>downto</B> 0);
+<B>constant</B> zero			: std_logic_vector(n-1 <B>downto</B> 0):=(<B>others</B>=>'0'); 
+
+<B>begin</B>
+	
+gen256: <B>if</B> n=GROESTL_DATA_SIZE_SMALL <B>generate</B>
+
+	addcons(511 <B>downto</B> 504) <= (input(511 <B>downto</B> 504) <B>xor</B> round <B>xor</B> x"00") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(511 <B>downto</B> 504));
+	addcons(503 <B>downto</B> 456) <= input(503 <B>downto</B> 456)  <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(503 <B>downto</B> 456)); 
+	addcons(455 <B>downto</B> 448) <= input(455 <B>downto</B> 448) <B>when</B> p_mode ='1' <B>else</B> (x"ff" <B>xor</B> input(455 <B>downto</B> 448) <B>xor</B> round);
+	
+	addcons(447 <B>downto</B> 440) <= (input(447 <B>downto</B> 440) <B>xor</B> round <B>xor</B> x"10") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(447 <B>downto</B> 440));
+	addcons(439 <B>downto</B> 392) <= input(439 <B>downto</B> 392)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(439 <B>downto</B> 392)); 
+	addcons(391 <B>downto</B> 384) <= input(391 <B>downto</B> 384) <B>when</B> p_mode ='1' <B>else</B> (x"ef" <B>xor</B> input(391 <B>downto</B> 384) <B>xor</B> round);
+
+	addcons(383 <B>downto</B> 376) <= (input(383 <B>downto</B> 376) <B>xor</B> round <B>xor</B> x"20") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(383 <B>downto</B> 376));
+	addcons(375 <B>downto</B> 328) <= input(375 <B>downto</B> 328)  <B>when</B> p_mode ='1' <B>else</B>(<B>not</B> input(375 <B>downto</B> 328)); 
+	addcons(327 <B>downto</B> 320) <= input(327 <B>downto</B> 320) <B>when</B> p_mode ='1' <B>else</B> (x"df" <B>xor</B> input(327 <B>downto</B> 320) <B>xor</B> round);
+
+	addcons(319 <B>downto</B> 312) <= (input(319 <B>downto</B> 312) <B>xor</B> round <B>xor</B> x"30") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(319 <B>downto</B> 312));
+	addcons(311 <B>downto</B> 264) <= input(311 <B>downto</B> 264)  <B>when</B> p_mode ='1' <B>else</B>(<B>not</B> input(311 <B>downto</B> 264)); 
+	addcons(263 <B>downto</B> 256) <= input(263 <B>downto</B> 256) <B>when</B> p_mode ='1' <B>else</B> (x"cf" <B>xor</B> input(263 <B>downto</B> 256) <B>xor</B> round);
+
+	addcons(255 <B>downto</B> 248) <= (input(255 <B>downto</B> 248) <B>xor</B> round <B>xor</B> x"40") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(255 <B>downto</B> 248));
+	addcons(247 <B>downto</B> 200) <= input(247 <B>downto</B> 200)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(247 <B>downto</B> 200)); 
+	addcons(199 <B>downto</B> 192) <= input(199 <B>downto</B> 192) <B>when</B> p_mode ='1' <B>else</B> (x"bf" <B>xor</B> input(199 <B>downto</B> 192) <B>xor</B> round);
+
+	addcons(191 <B>downto</B> 184) <= (input(191 <B>downto</B> 184) <B>xor</B> round <B>xor</B> x"50") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(191 <B>downto</B> 184));
+	addcons(183 <B>downto</B> 136) <= input(183 <B>downto</B> 136)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(183 <B>downto</B> 136)); 
+	addcons(135 <B>downto</B> 128) <= input(135 <B>downto</B> 128) <B>when</B> p_mode ='1' <B>else</B> (x"af" <B>xor</B> input(135 <B>downto</B> 128) <B>xor</B> round);
+
+	addcons(127 <B>downto</B> 120) <= (input(127 <B>downto</B> 120) <B>xor</B> round <B>xor</B> x"60") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(127 <B>downto</B> 120));
+	addcons(119 <B>downto</B> 72) <= input(119 <B>downto</B> 72)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(119 <B>downto</B> 72)); 
+	addcons(71 <B>downto</B> 64) <= input(71 <B>downto</B> 64) <B>when</B> p_mode ='1' <B>else</B> (x"9f" <B>xor</B> input(71 <B>downto</B> 64) <B>xor</B> round);
+
+	addcons(63 <B>downto</B> 56) <= (input(63 <B>downto</B> 56) <B>xor</B> round <B>xor</B> x"70") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(63 <B>downto</B> 56));
+	addcons(55 <B>downto</B> 8) <= input(55 <B>downto</B> 8)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(55 <B>downto</B> 8)); 
+	addcons(7 <B>downto</B> 0) <= input(7 <B>downto</B> 0) <B>when</B> p_mode ='1' <B>else</B> (x"8f" <B>xor</B> input(7 <B>downto</B> 0) <B>xor</B> round);
+<B>end</B> <B>generate</B>;			  		  
+
+gen512: <B>if</B> n=GROESTL_DATA_SIZE_BIG <B>generate</B>	 
+
+	addcons(1023 <B>downto</B> 1016) <= (input(1023 <B>downto</B> 1016) <B>xor</B> round <B>xor</B> x"00") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(1023 <B>downto</B> 1016));
+	addcons(1015 <B>downto</B> 968) <= input(1015 <B>downto</B> 968)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(1015 <B>downto</B> 968)); 
+	addcons(967 <B>downto</B> 960) <= input(967 <B>downto</B> 960) <B>when</B> p_mode ='1' <B>else</B> (x"ff" <B>xor</B> input(967 <B>downto</B> 960) <B>xor</B> round); 
+
+	addcons(959 <B>downto</B> 952) <= (input(959 <B>downto</B> 952) <B>xor</B> round <B>xor</B> x"10") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(959 <B>downto</B> 952));
+	addcons(951 <B>downto</B> 904) <= input(951 <B>downto</B> 904)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(951 <B>downto</B> 904)); 
+	addcons(903 <B>downto</B> 896) <= input(903 <B>downto</B> 896) <B>when</B> p_mode ='1' <B>else</B> (x"ef" <B>xor</B> input(903 <B>downto</B> 896) <B>xor</B> round); 
+
+	addcons(895 <B>downto</B> 888) <= (input(895 <B>downto</B> 888) <B>xor</B> round <B>xor</B> x"20") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(895 <B>downto</B> 888));
+	addcons(887 <B>downto</B> 840) <= input(887 <B>downto</B> 840)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(887 <B>downto</B> 840)); 
+	addcons(839 <B>downto</B> 832) <= input(839 <B>downto</B> 832) <B>when</B> p_mode ='1' <B>else</B> (x"df" <B>xor</B> input(839 <B>downto</B> 832) <B>xor</B> round);  
+
+	addcons(831 <B>downto</B> 824) <= (input(831 <B>downto</B> 824) <B>xor</B> round <B>xor</B> x"30") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(831 <B>downto</B> 824));
+	addcons(823 <B>downto</B> 776) <= input(823 <B>downto</B> 776)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(823 <B>downto</B> 776)); 
+	addcons(775 <B>downto</B> 768) <= input(775 <B>downto</B> 768) <B>when</B> p_mode ='1' <B>else</B> (x"cf" <B>xor</B> input(775 <B>downto</B> 768) <B>xor</B> round);
+
+	addcons(767 <B>downto</B> 760) <= (input(767 <B>downto</B> 760) <B>xor</B> round <B>xor</B> x"40") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(767 <B>downto</B> 760));
+	addcons(759 <B>downto</B> 712) <= input(759 <B>downto</B> 712)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(759 <B>downto</B> 712)); 
+	addcons(711 <B>downto</B> 704) <= input(711 <B>downto</B> 704) <B>when</B> p_mode ='1' <B>else</B> (x"bf" <B>xor</B> input(711 <B>downto</B> 704) <B>xor</B> round);
+
+	addcons(703 <B>downto</B> 696) <= (input(703 <B>downto</B> 696) <B>xor</B> round <B>xor</B> x"50") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(703 <B>downto</B> 696));
+	addcons(695 <B>downto</B> 648) <= input(695 <B>downto</B> 648)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(695 <B>downto</B> 648)); 
+	addcons(647 <B>downto</B> 640) <= input(647 <B>downto</B> 640) <B>when</B> p_mode ='1' <B>else</B> (x"af" <B>xor</B> input(647 <B>downto</B> 640) <B>xor</B> round);
+
+	addcons(639 <B>downto</B> 632) <= (input(639 <B>downto</B> 632) <B>xor</B> round <B>xor</B> x"60") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(639 <B>downto</B> 632));
+	addcons(631 <B>downto</B> 584) <= input(631 <B>downto</B> 584)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(631 <B>downto</B> 584)); 
+	addcons(583 <B>downto</B> 576) <= input(583 <B>downto</B> 576) <B>when</B> p_mode ='1' <B>else</B> (x"9f" <B>xor</B> input(583 <B>downto</B> 576) <B>xor</B> round);
+
+	addcons(575 <B>downto</B> 568) <= (input(575 <B>downto</B> 568) <B>xor</B> round <B>xor</B> x"70") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(575 <B>downto</B> 568));
+	addcons(567 <B>downto</B> 520) <= input(567 <B>downto</B> 520)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(567 <B>downto</B> 520)); 
+	addcons(519 <B>downto</B> 512) <= input(519 <B>downto</B> 512) <B>when</B> p_mode ='1' <B>else</B> (x"8f" <B>xor</B> input(519 <B>downto</B> 512) <B>xor</B> round);
+
+	addcons(511 <B>downto</B> 504) <= (input(511 <B>downto</B> 504) <B>xor</B> round <B>xor</B> x"80") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(511 <B>downto</B> 504));
+	addcons(503 <B>downto</B> 456) <= input(503 <B>downto</B> 456)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(503 <B>downto</B> 456)); 
+	addcons(455 <B>downto</B> 448) <= input(455 <B>downto</B> 448) <B>when</B> p_mode ='1' <B>else</B> (x"7f" <B>xor</B> input(455 <B>downto</B> 448) <B>xor</B> round);
+	
+	addcons(447 <B>downto</B> 440) <= (input(447 <B>downto</B> 440) <B>xor</B> round <B>xor</B> x"90") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(447 <B>downto</B> 440));
+	addcons(439 <B>downto</B> 392) <= input(439 <B>downto</B> 392)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(439 <B>downto</B> 392)); 
+	addcons(391 <B>downto</B> 384) <= input(391 <B>downto</B> 384) <B>when</B> p_mode ='1' <B>else</B> (x"6f" <B>xor</B> input(391 <B>downto</B> 384) <B>xor</B> round);
+
+	addcons(383 <B>downto</B> 376) <= (input(383 <B>downto</B> 376) <B>xor</B> round <B>xor</B> x"a0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(383 <B>downto</B> 376));
+	addcons(375 <B>downto</B> 328) <= input(375 <B>downto</B> 328)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(375 <B>downto</B> 328)); 
+	addcons(327 <B>downto</B> 320) <= input(327 <B>downto</B> 320) <B>when</B> p_mode ='1' <B>else</B> (x"5f" <B>xor</B> input(327 <B>downto</B> 320) <B>xor</B> round);
+
+	addcons(319 <B>downto</B> 312) <= (input(319 <B>downto</B> 312) <B>xor</B> round <B>xor</B> x"b0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(319 <B>downto</B> 312));
+	addcons(311 <B>downto</B> 264) <= input(311 <B>downto</B> 264)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(311 <B>downto</B> 264)); 
+	addcons(263 <B>downto</B> 256) <= input(263 <B>downto</B> 256) <B>when</B> p_mode ='1' <B>else</B> (x"4f" <B>xor</B> input(263 <B>downto</B> 256) <B>xor</B> round);
+
+	addcons(255 <B>downto</B> 248) <= (input(255 <B>downto</B> 248) <B>xor</B> round <B>xor</B> x"c0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(255 <B>downto</B> 248));
+	addcons(247 <B>downto</B> 200) <= input(247 <B>downto</B> 200)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(247 <B>downto</B> 200)); 
+	addcons(199 <B>downto</B> 192) <= input(199 <B>downto</B> 192) <B>when</B> p_mode ='1' <B>else</B> (x"3f" <B>xor</B> input(199 <B>downto</B> 192) <B>xor</B> round);
+
+	addcons(191 <B>downto</B> 184) <= (input(191 <B>downto</B> 184) <B>xor</B> round <B>xor</B> x"d0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(191 <B>downto</B> 184));
+	addcons(183 <B>downto</B> 136) <= input(183 <B>downto</B> 136)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(183 <B>downto</B> 136)); 
+	addcons(135 <B>downto</B> 128) <= input(135 <B>downto</B> 128) <B>when</B> p_mode ='1' <B>else</B> (x"2f" <B>xor</B> input(135 <B>downto</B> 128) <B>xor</B> round);
+
+	addcons(127 <B>downto</B> 120) <= (input(127 <B>downto</B> 120) <B>xor</B> round <B>xor</B> x"e0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(127 <B>downto</B> 120));
+	addcons(119 <B>downto</B> 72) <= input(119 <B>downto</B> 72)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(119 <B>downto</B> 72)); 
+	addcons(71 <B>downto</B> 64) <= input(71 <B>downto</B> 64) <B>when</B> p_mode ='1' <B>else</B> (x"1f" <B>xor</B> input(71 <B>downto</B> 64) <B>xor</B> round);
+
+	addcons(63 <B>downto</B> 56) <= (input(63 <B>downto</B> 56) <B>xor</B> round <B>xor</B> x"f0") <B>when</B> p_mode ='1' <B>else</B> (<B>not</B> input(63 <B>downto</B> 56));
+	addcons(55 <B>downto</B> 8) <= input(55 <B>downto</B> 8)  <B>when</B> p_mode ='1'<B>else</B> (<B>not</B> input(55 <B>downto</B> 8)); 
+	addcons(7 <B>downto</B> 0) <= input(7 <B>downto</B> 0) <B>when</B> p_mode ='1' <B>else</B> (x"0f" <B>xor</B> input(7 <B>downto</B> 0) <B>xor</B> round);
+
+<B>end</B> <B>generate</B>;
+	
+	<FONT COLOR=#0000C0>sbox_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE - 1  <B>generate</B>
+	sbox	: aes_sbox 	<B>generic</B> <B>map</B> (rom_style=>rom_style)
+			<B>port</B> <B>map</B> (	 
+				input=>addcons(AES_SBOX_SIZE*i + 7 <B>downto</B> AES_SBOX_SIZE*i), 
+				output=>after_subbyte(AES_SBOX_SIZE*i+7 <B>downto</B> AES_SBOX_SIZE*i));	
+	<B>end</B> <B>generate</B>;	
+
+	pl_reg		: regna <B>generic</B> <B>map</B> (n=>n, init=>zero) <B>port</B> <B>map</B> (clk=>clk, rst=>rst, en=>VCC, input=>after_subbyte, output=>after_reg);
+
+<I><FONT COLOR=#808080>-- kgf - 2011-09-28 - changed the instantiation to two separate entities, and</FONT></I>
+<I><FONT COLOR=#808080>-- not two architectures of the same entity</FONT></I>
+	srp			:<B>entity</B> work.groestl_shiftrowp(rtl) <B>generic</B> <B>map</B> (n=>n)<B>port</B> <B>map</B> (input=>after_reg, output=>after_srp);
+	srq			:<B>entity</B> work.groestl_shiftrowq(rtl) <B>generic</B> <B>map</B> (n=>n)<B>port</B> <B>map</B> (input=>after_reg, output=>after_srq);
+	
+	after_shiftrow <= after_srp <B>when</B> p_mode='0' <B>else</B> after_srq;
+
+mc256: <B>if</B> n=GROESTL_DATA_SIZE_SMALL <B>generate</B>	
+	mc			: <B>entity</B> work.groestl_mixbytes(groestl_mixbytes)	
+					<B>port</B> <B>map</B> (input=>after_shiftrow,  output=>output);	
+<B>end</B> <B>generate</B>;
+
+mc512: <B>if</B> n=GROESTL_DATA_SIZE_BIG <B>generate</B>	
+	mc_left			: <B>entity</B> work.groestl_mixbytes(groestl_mixbytes) 
+					<B>port</B> <B>map</B> (input=>after_shiftrow(1023 <B>downto</B> 512),  output=>output(1023 <B>downto</B> 512));	
+	mc_right		: <B>entity</B> work.groestl_mixbytes(groestl_mixbytes) 
+					<B>port</B> <B>map</B> (input=>after_shiftrow(511 <B>downto</B> 0),  output=>output(511 <B>downto</B> 0));	
+
+<B>end</B> <B>generate</B>;
+
+<B>end</B> round3_pipelined; 			 	   
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

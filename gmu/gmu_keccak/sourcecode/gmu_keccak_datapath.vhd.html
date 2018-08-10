@@ -1,0 +1,122 @@
+<HTML>
+<TITLE>
+ gmu_keccak/sourcecode/gmu_keccak_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.keccak_pkg.all;
+
+<I><FONT COLOR=#808080>-- Possible generics values: </FONT></I>
+<I><FONT COLOR=#808080>-- hs = {HASH_SIZE_256, HASH_SIZE_512} </FONT></I>
+<I><FONT COLOR=#808080>-- b = {KECCAK256_CAPACITY, KECCAK512_CAPACITY}</FONT></I>
+<I><FONT COLOR=#808080>-- possible combinaations of (hs, b) = {(HASH_SIZE_256, KECCAK256_CAPACITY), (HASH_SIZE_512, KECCAK512_CAPACITY)}</FONT></I>
+
+<B>entity</B> gmu_keccak_datapath <B>is</B>
+<B>generic</B> (b : integer := KECCAK256_CAPACITY; hs: integer := HASH_SIZE_256);	
+<B>port</B> (
+		clk 				:<B>in</B> std_logic;
+		rst 				:<B>in</B> std_logic;
+		din 				:<B>in</B> std_logic_vector(b-1 <B>downto</B> 0);
+		dout 				:<B>out</B> std_logic_vector(hs-1 <B>downto</B> 0);		
+	
+		<I><FONT COLOR=#808080>-- process</FONT></I>
+		sel_xor 			:<B>in</B> std_logic;
+		sel_final			:<B>in</B> std_logic;
+		wr_state			:<B>in</B> std_logic;
+		rd_ctr				:<B>in</B> std_logic_vector(4 <B>downto</B> 0)
+	);
+<B>end</B> gmu_keccak_datapath;			   
+
+<B>architecture</B> struct <B>of</B> gmu_keccak_datapath <B>is</B>  	
+	<B>signal</B> from_din	:std_logic_vector(b-1 <B>downto</B> 0);																																	   
+	<B>signal</B> from_concat, to_xor, from_round, from_xor, to_register, to_round : std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0);		  							   
+	<B>signal</B> rc	:	std_logic_vector(w-1   <B>downto</B> 0);
+	
+	<B>constant</B> zeros: std_logic_vector (KECCAK_STATE-1-b <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> state_zero : std_logic_vector (KECCAK_STATE-1 <B>downto</B> 0):=(<B>others</B> => '0'); 
+ 	
+	<B>type</B> res_type <B>is</B> <B>array</B> (0 <B>to</B> hs/64-1) <B>of</B> std_logic_vector(w-1 <B>downto</B> 0); 			   
+	<B>signal</B> se_result : res_type;   
+	
+	<B>type</B> din_array <B>is</B> <B>array</B> (0 <B>to</B> b/64-1) <B>of</B> std_logic_vector(31 <B>downto</B> 0);
+	<B>signal</B> din_a, din_b : din_array;
+
+<I><FONT COLOR=#808080>-- kgf - 2011-09-28 - old school</FONT></I>
+        <B>component</B> keccak_round
+          <B>port</B> (
+            rin  : <B>in</B>  std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0);
+            rc   : <B>in</B>  std_logic_vector(63 <B>downto</B> 0);
+            rout : <B>out</B> std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0));
+        <B>end</B> <B>component</B>;
+
+
+        
+	<I><FONT COLOR=#808080>-- debugging signals</FONT></I>
+<I><FONT COLOR=#808080>--	signal aa, bb, cc : state_table;</FONT></I>
+<B>begin</B>	
+<I><FONT COLOR=#808080>--	aa <= str2table( to_round );</FONT></I>
+<I><FONT COLOR=#808080>--	bb <= str2table( from_round );		 </FONT></I>
+<I><FONT COLOR=#808080>--	cc <= str2table( from_concat );</FONT></I>
+	
+	<I><FONT COLOR=#808080>-- serial input parallel output</FONT></I>
+	<I><FONT COLOR=#808080>-- din_a downto 0);</FONT></I>
+	<I><FONT COLOR=#808080>-- din_b downto 32);</FONT></I>
+	<I><FONT COLOR=#808080>-- swap_din <= switch_endian_byte(din_a,32,32)  &  switch_endian_byte(din_b,32,32);</FONT></I>
+	
+	<FONT COLOR=#0000C0>swapGen</FONT>: <B>for</B> i <B>in</B> b/64-1 <B>downto</B> 0 <B>generate</B>
+		din_a(i) <= din(i*64+31 <B>downto</B> i*64);
+		din_b(i) <= din(i*64+63 <B>downto</B> i*64+32);
+		from_din(i*64+63 <B>downto</B> i*64) <= switch_endian_byte(din_a(i),32,32) & switch_endian_byte(din_b(i),32,32);
+	<B>end</B> <B>generate</B>;
+
+	from_concat <=  from_din & zeros;	   			
+	to_xor <= state_zero <B>when</B> sel_xor='1' <B>else</B> from_round; 
+	from_xor <= from_concat <B>xor</B> to_xor;
+	to_register <= from_xor <B>when</B> sel_final='1' <B>else</B> from_round;
+		
+	<I><FONT COLOR=#808080>-- register for intermediate values	</FONT></I>
+	stateRegInst	: regna 
+		<B>generic</B> <B>map</B> (N => KECCAK_STATE, init=>state_zero) 
+		<B>port</B> <B>map</B> ( clk =>clk, rst=>rst, en =>wr_state, input=>to_register, output=>to_round);	 
+   
+	<I><FONT COLOR=#808080>-- asynchronous memory for Keccak constants </FONT></I>
+	rd_cons 	: <B>entity</B> work.keccak_cons(keccak_cons) 	<B>port</B> <B>map</B> (addr=>rd_ctr, rc=>rc);
+	<I><FONT COLOR=#808080>-- Keccak round function with architecture based on Marcin Rogawski implementation</FONT></I>
+	<I><FONT COLOR=#808080>-- rd 			: entity work.keccak_round(mrogawski_round)port map (rc=>rc, rin=>to_round, rout=>from_round);</FONT></I>
+	<I><FONT COLOR=#808080>-- Keccak round function with architecture based on Guido Bertoni implementation</FONT></I>
+	<I><FONT COLOR=#808080>--rd 			: entity work.keccak_round(gbertoni_round)port map (rc=>rc, rin=>to_round, rout=>from_round);</FONT></I>
+ 
+        <I><FONT COLOR=#808080>-- include either the rogawski or the bertoni round in the source list</FONT></I>
+        i_rd: keccak_round
+          <B>port</B> <B>map</B> (
+            rin  => to_round,
+            rc   => rc,
+            rout => from_round);
+
+        
+   	<I><FONT COLOR=#808080>-- piso endianess fixing function</FONT></I>
+	<FONT COLOR=#0000C0>out_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> hs/w-1 <B>generate</B>	
+		se_result(i) <= to_round(KECCAK_STATE-i*w-1 <B>downto</B> KECCAK_STATE-(i+1)*w); 
+		dout(hs-i*w-1 <B>downto</B> hs-(i+1)*w) <= switch_endian_word(x=>se_result(i), width=>w, w=>8);	
+	<B>end</B> <B>generate</B>;				
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

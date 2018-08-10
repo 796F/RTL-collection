@@ -1,0 +1,63 @@
+<HTML>
+<TITLE>
+ gmu_keccak/sourcecode/keccak_cons.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.keccak_pkg.all;
+
+<I><FONT COLOR=#808080>-- asynchronous memory for Keccak constants</FONT></I>
+<I><FONT COLOR=#808080>-- possible combinations for generic unrolled round factor ur = {1, 2, 3, 4, 6, 8, 12, 24}</FONT></I>
+<B>entity</B> keccak_cons <B>is</B>
+<B>generic</B> (ur : integer:=1);
+<B>port</B>(
+	addr	 		: <B>in</B>  std_logic_vector(4 <B>downto</B> 0);
+	rc				: <B>out</B> std_logic_vector(ur*w-1 <B>downto</B> 0));
+<B>end</B> keccak_cons;
+
+<B>architecture</B> keccak_cons <B>of</B> keccak_cons <B>is</B>
+
+<B>type</B> matrix <B>is</B> <B>array</B> (0 <B>to</B> 31) <B>of</B> std_logic_vector(w-1 <B>downto</B> 0);
+<B>constant</B> my_rom: matrix :=(
+x"0000000000000001", x"0000000000008082", x"800000000000808A", x"8000000080008000",
+x"000000000000808B", x"0000000080000001", x"8000000080008081", x"8000000000008009",
+x"000000000000008A", x"0000000000000088", x"0000000080008009", x"000000008000000A",
+x"000000008000808B", x"800000000000008B", x"8000000000008089", x"8000000000008003",
+x"8000000000008002", x"8000000000000080", x"000000000000800A", x"800000008000000A",
+x"8000000080008081", x"8000000000008080", x"0000000080000001", x"8000000080008008",
+x"0000000000000000", x"0000000000000000", x"0000000000000000", x"0000000000000000",
+x"0000000000000000", x"0000000000000000", x"0000000000000000", x"0000000000000000");
+
+<B>begin</B>
+
+l1_con: <B>if</B> ur = 1 <B>generate</B>
+	rc <= my_rom(conv_integer(unsigned(addr)));
+<B>end</B> <B>generate</B>;
+
+l2_con: <B>if</B> ur > 1 <B>generate</B>
+	<FONT COLOR=#0000C0>l2_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> ur-1 <B>generate</B>
+		rc(w*(i+1)-1 <B>downto</B> w*i) <= my_rom(conv_integer(unsigned(addr+i)));
+	<B>end</B> <B>generate</B>;	
+<B>end</B> <B>generate</B>;
+
+<B>end</B> keccak_cons;
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

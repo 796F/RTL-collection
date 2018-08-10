@@ -1,0 +1,351 @@
+<HTML>
+<TITLE>
+ ethz_keccak/sourcecode/ethz_keccak.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Keccak</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : keccak.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-10</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-24</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Main Keccak block original by Pietro Gendotti and Luca Henzen</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-10  1.0      kgf	Added the PenUltCyclexSO signal that comes from</FONT></I>
+<I><FONT COLOR=#808080>--                              the controller</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-19  1.1      kgf     Adapted the interface signal names</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-24  1.2      kgf     Added the scan signals</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.keccakpkg.all;
+
+
+<B>entity</B> ethz_keccak <B>is</B>
+  
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;     <I><FONT COLOR=#808080>-- The penultimate cycle of </FONT></I>
+                                        <I><FONT COLOR=#808080>-- computations</FONT></I>
+    <FONT COLOR=#804040>DxDI</FONT>           : <B>in</B>  std_logic_vector(1087 <B>downto</B> 0);
+    <FONT COLOR=#804040>DxDO</FONT>           : <B>out</B> std_logic_vector(HWIDTH-1 <B>downto</B> 0));
+
+<B>end</B> ethz_keccak;
+
+
+<B>architecture</B> rtl <B>of</B> ethz_keccak <B>is</B>
+  
+  <B>component</B> keccak_controller
+    <B>port</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+      INENxEI        : <B>in</B>  std_logic;
+      OUTENxEO       : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>StateSelxSO</FONT>    : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+      <FONT COLOR=#804040>RcntxDO</FONT>        : <B>out</B> unsigned(4 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>signal</B> <FONT COLOR=#804040>ThetaInxD</FONT>, <FONT COLOR=#804040>ThetaOutxD</FONT>, <FONT COLOR=#804040>PiInxD</FONT>, <FONT COLOR=#804040>PiOutxD</FONT>, <FONT COLOR=#804040>RhoInxD</FONT>, <FONT COLOR=#804040>RhoOutxD</FONT>, <FONT COLOR=#804040>ChiInxD</FONT>, <FONT COLOR=#804040>ChiOutxD</FONT>,
+         <FONT COLOR=#804040>IotaInxD</FONT> , <FONT COLOR=#804040>IotaOutxD</FONT>, <FONT COLOR=#804040>IotaOutTempxD</FONT>, <FONT COLOR=#804040>StateTempxD</FONT> : state;
+  <B>signal</B> <FONT COLOR=#804040>CxD</FONT>: sheet;
+  <B>signal</B> <FONT COLOR=#804040>DxD</FONT> : sheet;
+<I><FONT COLOR=#808080>--  signal ZerosxD : std_logic_vector(63 downto 0) := (others=>'0');</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>DInxD</FONT> : state;
+  <B>signal</B> <FONT COLOR=#1E90FF>StateSelxS</FONT> : std_logic;
+  <B>signal</B> <FONT COLOR=#804040>RcntxD</FONT> : unsigned(4 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>StatexDN</FONT> : state;
+  <B>signal</B> <FONT COLOR=#804040>StateInxD</FONT> : state;
+  
+<B>begin</B>
+  
+  u_controller : keccak_controller
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         => <FONT COLOR=#32CD32>ClkxCI</FONT>,
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        => <FONT COLOR=#FF6347>RstxRBI</FONT>,
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>,
+      INENxEI        => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>,
+      OUTENxEO       => <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>,
+      <FONT COLOR=#1E90FF>StateSelxSO</FONT>    => <FONT COLOR=#1E90FF>StateSelxS</FONT>,
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,
+      <FONT COLOR=#804040>RcntxDO</FONT>        => <FONT COLOR=#804040>RcntxD</FONT>);
+
+  <FONT COLOR=#0000C0>din01</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 2 <B>generate</B>
+    <FONT COLOR=#0000C0>din02</FONT>: <B>for</B> x <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>DInxD</FONT>(x,y) <= <FONT COLOR=#804040>DxDI</FONT>(((3-y)*5-x+2)*64-1 <B>downto</B> ((3-y)*5-x+1)*64);
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>din02</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>din01</FONT>;
+
+  <FONT COLOR=#804040>DInxD</FONT>(0,3) <= <FONT COLOR=#804040>DxDI</FONT>(127 <B>downto</B> 64);
+  <FONT COLOR=#804040>DInxD</FONT>(1,3) <= <FONT COLOR=#804040>DxDI</FONT>(63 <B>downto</B> 0);
+  <FONT COLOR=#804040>DInxD</FONT>(0,4) <= (<B>others</B>=>'0');
+  <FONT COLOR=#804040>DInxD</FONT>(1,4) <= (<B>others</B>=>'0');
+
+  <FONT COLOR=#0000C0>din03</FONT>: <B>for</B> y <B>in</B> 3 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#0000C0>din04</FONT>: <B>for</B> x <B>in</B> 2 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>DInxD</FONT>(x,y) <= (<B>others</B> => '0');
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>din04</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>din03</FONT>;
+
+
+  <I><FONT COLOR=#808080>-- Connections</FONT></I>
+  <I><FONT COLOR=#808080>------------------------------------------------------------------------------- </FONT></I>
+  <FONT COLOR=#804040>ThetaInxD</FONT>   <= <FONT COLOR=#804040>StatexDP</FONT>;
+  <FONT COLOR=#804040>RhoInxD</FONT>     <= <FONT COLOR=#804040>ThetaOutxD</FONT>;
+  <FONT COLOR=#804040>PiInxD</FONT>      <= <FONT COLOR=#804040>RhoOutxD</FONT>;
+  <FONT COLOR=#804040>ChiInxD</FONT>     <= <FONT COLOR=#804040>PiOutxD</FONT>;
+  <FONT COLOR=#804040>IotaInxD</FONT>    <= <FONT COLOR=#804040>ChiOutxD</FONT>;
+ 
+
+  <I><FONT COLOR=#808080>-- Theta</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>--  theta01: for x in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    CxD(x) ThetaInxD(x,0) xor ThetaInxD(x,1) xor ThetaInxD(x,2) xor</FONT></I>
+<I><FONT COLOR=#808080>--              ThetaInxD(x,3) xor ThetaInxD(x,4);</FONT></I>
+<I><FONT COLOR=#808080>--    DxD(x) CxD(x)(63-1 downto 0) & '0') xor (ZerosxD(62 downto 0) & CxD(x)(63));</FONT></I>
+
+<I><FONT COLOR=#808080>--  end generate theta01;</FONT></I>
+
+  <FONT COLOR=#804040>CxD</FONT>(0) <= <FONT COLOR=#804040>ThetaInxD</FONT>(0,0) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(0,1) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(0,2) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(0,3) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(0,4);
+  <FONT COLOR=#804040>CxD</FONT>(1) <= <FONT COLOR=#804040>ThetaInxD</FONT>(1,0) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(1,1) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(1,2) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(1,3) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(1,4);
+  <FONT COLOR=#804040>CxD</FONT>(2) <= <FONT COLOR=#804040>ThetaInxD</FONT>(2,0) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(2,1) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(2,2) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(2,3) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(2,4);
+  <FONT COLOR=#804040>CxD</FONT>(3) <= <FONT COLOR=#804040>ThetaInxD</FONT>(3,0) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(3,1) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(3,2) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(3,3) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(3,4);
+  <FONT COLOR=#804040>CxD</FONT>(4) <= <FONT COLOR=#804040>ThetaInxD</FONT>(4,0) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(4,1) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(4,2) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(4,3) <B>xor</B> <FONT COLOR=#804040>ThetaInxD</FONT>(4,4);
+
+  <FONT COLOR=#804040>DxD</FONT>(0) <= <FONT COLOR=#804040>CxD</FONT>(0)(63-1 <B>downto</B> 0) & <FONT COLOR=#804040>CxD</FONT>(0)(63);
+  <FONT COLOR=#804040>DxD</FONT>(1) <= <FONT COLOR=#804040>CxD</FONT>(1)(63-1 <B>downto</B> 0) & <FONT COLOR=#804040>CxD</FONT>(1)(63);
+  <FONT COLOR=#804040>DxD</FONT>(2) <= <FONT COLOR=#804040>CxD</FONT>(2)(63-1 <B>downto</B> 0) & <FONT COLOR=#804040>CxD</FONT>(2)(63);
+  <FONT COLOR=#804040>DxD</FONT>(3) <= <FONT COLOR=#804040>CxD</FONT>(3)(63-1 <B>downto</B> 0) & <FONT COLOR=#804040>CxD</FONT>(3)(63);
+  <FONT COLOR=#804040>DxD</FONT>(4) <= <FONT COLOR=#804040>CxD</FONT>(4)(63-1 <B>downto</B> 0) & <FONT COLOR=#804040>CxD</FONT>(4)(63);
+
+
+<I><FONT COLOR=#808080>--  theta02: for x in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    theta03: for y in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--      ThetaOutxD(x,y) ThetaInxD(x,y) xor DxD((x+1) mod 5) xor CxD((x+4) mod 5);</FONT></I>
+		
+<I><FONT COLOR=#808080>--    end generate theta03;</FONT></I>
+<I><FONT COLOR=#808080>--  end generate theta02;</FONT></I>
+
+  <FONT COLOR=#0000C0>theta00</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>ThetaOutxD</FONT>(0,y) <= <FONT COLOR=#804040>ThetaInxD</FONT>(0,y) <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(1) <B>xor</B> <FONT COLOR=#804040>CxD</FONT>(4);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>theta00</FONT>;
+
+  <FONT COLOR=#0000C0>theta01</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>ThetaOutxD</FONT>(1,y) <= <FONT COLOR=#804040>ThetaInxD</FONT>(1,y) <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(2) <B>xor</B> <FONT COLOR=#804040>CxD</FONT>(0);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>theta01</FONT>;
+
+  <FONT COLOR=#0000C0>theta02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>ThetaOutxD</FONT>(2,y) <= <FONT COLOR=#804040>ThetaInxD</FONT>(2,y) <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(3) <B>xor</B> <FONT COLOR=#804040>CxD</FONT>(1);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>theta02</FONT>;
+
+  <FONT COLOR=#0000C0>theta03</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>ThetaOutxD</FONT>(3,y) <= <FONT COLOR=#804040>ThetaInxD</FONT>(3,y) <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(4) <B>xor</B> <FONT COLOR=#804040>CxD</FONT>(2);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>theta03</FONT>;
+
+  <FONT COLOR=#0000C0>theta04</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>ThetaOutxD</FONT>(4,y) <= <FONT COLOR=#804040>ThetaInxD</FONT>(4,y) <B>xor</B> <FONT COLOR=#804040>DxD</FONT>(0) <B>xor</B> <FONT COLOR=#804040>CxD</FONT>(3);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>theta04</FONT>;
+
+  
+
+  <I><FONT COLOR=#808080>-- Rho</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>RhoOutxD</FONT>(0,0) <=  <FONT COLOR=#804040>RhoInxD</FONT>(0,0);
+
+<I><FONT COLOR=#808080>--  rho00: for y in 1 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    RhoOutxD(0,y) RhoInxD(0,y)(63-RhoOffsets(5*y) downto 0) & ZerosxD(RhoOffsets(5*y)-1 downto 0)) xor</FONT></I>
+<I><FONT COLOR=#808080>--                        (ZerosxD((63-RhoOffsets(5*y)) downto 0) & RhoInxD(0,y)(63 downto (63-RhoOffsets(5*y)+1)));</FONT></I>
+<I><FONT COLOR=#808080>--  end generate rho00;</FONT></I>
+
+  <FONT COLOR=#0000C0>rho00</FONT>: <B>for</B> y <B>in</B> 1 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>RhoOutxD</FONT>(0,y) <=  <FONT COLOR=#804040>RhoInxD</FONT>(0,y)(63-RHOOFFSETS(5*y) <B>downto</B> 0) & <FONT COLOR=#804040>RhoInxD</FONT>(0,y)(63 <B>downto</B> (63-RHOOFFSETS(5*y)+1));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rho00</FONT>;
+
+<I><FONT COLOR=#808080>--  rho01: for x in 1 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    rho02: for y in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--      RhoOutxD(x,y) RhoInxD(x,y)(63-RhoOffsets(x+5*y) downto 0) & ZerosxD(RhoOffsets(x+5*y)-1 downto 0)) xor</FONT></I>
+<I><FONT COLOR=#808080>--                        (ZerosxD((63-RhoOffsets(x+5*y)) downto 0) & RhoInxD(x,y)(63 downto (63-RhoOffsets(x+5*y)+1)));</FONT></I>
+<I><FONT COLOR=#808080>--    end generate rho02;</FONT></I>
+<I><FONT COLOR=#808080>--  end generate rho01;</FONT></I>
+  
+  <FONT COLOR=#0000C0>rho01</FONT>: <B>for</B> x <B>in</B> 1 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#0000C0>rho02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>RhoOutxD</FONT>(x,y) <=  <FONT COLOR=#804040>RhoInxD</FONT>(x,y)(63-RHOOFFSETS(x+5*y) <B>downto</B> 0) & <FONT COLOR=#804040>RhoInxD</FONT>(x,y)(63 <B>downto</B> (63-RHOOFFSETS(x+5*y)+1));
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rho02</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rho01</FONT>;       
+     
+
+  <I><FONT COLOR=#808080>-- Pi</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------     </FONT></I>
+<I><FONT COLOR=#808080>--  pi01: for x in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    pi02: for y in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--      PiOutxD(y, (2*x+3*y) mod 5) PiInxD(x,y);</FONT></I>
+		
+<I><FONT COLOR=#808080>--    end generate pi02;</FONT></I>
+<I><FONT COLOR=#808080>--  end generate pi01;</FONT></I>
+
+  <FONT COLOR=#804040>PiOutxD</FONT>(0, 0) <= <FONT COLOR=#804040>PiInxD</FONT>(0, 0);
+  <FONT COLOR=#804040>PiOutxD</FONT>(1, 3) <= <FONT COLOR=#804040>PiInxD</FONT>(0, 1);
+  <FONT COLOR=#804040>PiOutxD</FONT>(2, 1) <= <FONT COLOR=#804040>PiInxD</FONT>(0, 2);
+  <FONT COLOR=#804040>PiOutxD</FONT>(3, 4) <= <FONT COLOR=#804040>PiInxD</FONT>(0, 3);
+  <FONT COLOR=#804040>PiOutxD</FONT>(4, 2) <= <FONT COLOR=#804040>PiInxD</FONT>(0, 4);
+  <FONT COLOR=#804040>PiOutxD</FONT>(0, 2) <= <FONT COLOR=#804040>PiInxD</FONT>(1, 0);
+  <FONT COLOR=#804040>PiOutxD</FONT>(1, 0) <= <FONT COLOR=#804040>PiInxD</FONT>(1, 1);
+  <FONT COLOR=#804040>PiOutxD</FONT>(2, 3) <= <FONT COLOR=#804040>PiInxD</FONT>(1, 2);
+  <FONT COLOR=#804040>PiOutxD</FONT>(3, 1) <= <FONT COLOR=#804040>PiInxD</FONT>(1, 3);
+  <FONT COLOR=#804040>PiOutxD</FONT>(4, 4) <= <FONT COLOR=#804040>PiInxD</FONT>(1, 4);
+  <FONT COLOR=#804040>PiOutxD</FONT>(0, 4) <= <FONT COLOR=#804040>PiInxD</FONT>(2, 0);
+  <FONT COLOR=#804040>PiOutxD</FONT>(1, 2) <= <FONT COLOR=#804040>PiInxD</FONT>(2, 1);
+  <FONT COLOR=#804040>PiOutxD</FONT>(2, 0) <= <FONT COLOR=#804040>PiInxD</FONT>(2, 2);
+  <FONT COLOR=#804040>PiOutxD</FONT>(3, 3) <= <FONT COLOR=#804040>PiInxD</FONT>(2, 3);
+  <FONT COLOR=#804040>PiOutxD</FONT>(4, 1) <= <FONT COLOR=#804040>PiInxD</FONT>(2, 4);
+  <FONT COLOR=#804040>PiOutxD</FONT>(0, 1) <= <FONT COLOR=#804040>PiInxD</FONT>(3, 0);
+  <FONT COLOR=#804040>PiOutxD</FONT>(1, 4) <= <FONT COLOR=#804040>PiInxD</FONT>(3, 1);
+  <FONT COLOR=#804040>PiOutxD</FONT>(2, 2) <= <FONT COLOR=#804040>PiInxD</FONT>(3, 2);
+  <FONT COLOR=#804040>PiOutxD</FONT>(3, 0) <= <FONT COLOR=#804040>PiInxD</FONT>(3, 3);
+  <FONT COLOR=#804040>PiOutxD</FONT>(4, 3) <= <FONT COLOR=#804040>PiInxD</FONT>(3, 4);
+  <FONT COLOR=#804040>PiOutxD</FONT>(0, 3) <= <FONT COLOR=#804040>PiInxD</FONT>(4, 0);
+  <FONT COLOR=#804040>PiOutxD</FONT>(1, 1) <= <FONT COLOR=#804040>PiInxD</FONT>(4, 1);
+  <FONT COLOR=#804040>PiOutxD</FONT>(2, 4) <= <FONT COLOR=#804040>PiInxD</FONT>(4, 2);
+  <FONT COLOR=#804040>PiOutxD</FONT>(3, 2) <= <FONT COLOR=#804040>PiInxD</FONT>(4, 3);
+  <FONT COLOR=#804040>PiOutxD</FONT>(4, 0) <= <FONT COLOR=#804040>PiInxD</FONT>(4, 4);
+
+  <I><FONT COLOR=#808080>-- Chi</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>--  chi01: for y in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--    chi02: for x in 0 to 4 generate</FONT></I>
+<I><FONT COLOR=#808080>--      ChiOutxD(x,y) ChiInxD(x,y) xor (not(ChiInxD((x+1)mod 5,y)) and ChiInxD((x+2)mod 5,y));</FONT></I>
+					
+<I><FONT COLOR=#808080>--    end generate chi02;</FONT></I>
+<I><FONT COLOR=#808080>--  end generate chi01;</FONT></I>
+
+  <FONT COLOR=#0000C0>chi00</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>ChiOutxD</FONT>(0,y) <= <FONT COLOR=#804040>ChiInxD</FONT>(0,y) <B>xor</B> (<B>not</B>(<FONT COLOR=#804040>ChiInxD</FONT>(1,y)) <B>and</B> <FONT COLOR=#804040>ChiInxD</FONT>(2,y));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>chi00</FONT>;
+
+  <FONT COLOR=#0000C0>chi01</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>ChiOutxD</FONT>(1,y) <= <FONT COLOR=#804040>ChiInxD</FONT>(1,y) <B>xor</B> (<B>not</B>(<FONT COLOR=#804040>ChiInxD</FONT>(2,y)) <B>and</B> <FONT COLOR=#804040>ChiInxD</FONT>(3,y));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>chi01</FONT>;
+
+  <FONT COLOR=#0000C0>chi02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>ChiOutxD</FONT>(2,y) <= <FONT COLOR=#804040>ChiInxD</FONT>(2,y) <B>xor</B> (<B>not</B>(<FONT COLOR=#804040>ChiInxD</FONT>(3,y)) <B>and</B> <FONT COLOR=#804040>ChiInxD</FONT>(4,y));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>chi02</FONT>;
+
+  <FONT COLOR=#0000C0>chi03</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>ChiOutxD</FONT>(3,y) <= <FONT COLOR=#804040>ChiInxD</FONT>(3,y) <B>xor</B> (<B>not</B>(<FONT COLOR=#804040>ChiInxD</FONT>(4,y)) <B>and</B> <FONT COLOR=#804040>ChiInxD</FONT>(0,y));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>chi03</FONT>;
+
+  <FONT COLOR=#0000C0>chi04</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#804040>ChiOutxD</FONT>(4,y) <= <FONT COLOR=#804040>ChiInxD</FONT>(4,y) <B>xor</B> (<B>not</B>(<FONT COLOR=#804040>ChiInxD</FONT>(0,y)) <B>and</B> <FONT COLOR=#804040>ChiInxD</FONT>(1,y));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>chi04</FONT>; 
+
+        
+  <I><FONT COLOR=#808080>-- Iota</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------     </FONT></I>
+  <FONT COLOR=#0000C0>iota01</FONT>: <B>for</B> x <B>in</B> 1 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#0000C0>iota02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>IotaOutTempxD</FONT>(x,y) <=  <FONT COLOR=#804040>IotaInxD</FONT>(x,y);
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>iota02</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>iota01</FONT>;
+  
+  <FONT COLOR=#804040>IotaOutTempxD</FONT>(0,0) <= <FONT COLOR=#804040>IotaInxD</FONT>(0,0) <B>xor</B> ROUNDCONSTANCES(to_integer(<FONT COLOR=#804040>RcntxD</FONT>));
+  
+  <FONT COLOR=#0000C0>iota03</FONT>: <B>for</B> y <B>in</B> 1 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#804040>IotaOutTempxD</FONT>(0,y) <=  <FONT COLOR=#804040>IotaInxD</FONT>(0,y);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>iota03</FONT>;
+
+  <I><FONT COLOR=#808080>-- Reverse after Iota</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>rev01</FONT>: <B>for</B> x <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#0000C0>rev02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#0000C0>rev03</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+        <FONT COLOR=#804040>IotaOutxD</FONT>(x,y)(8*(i+1)-1 <B>downto</B> 8*i) <= <FONT COLOR=#804040>IotaOutTempxD</FONT>(x,y)(8*(8-i)-1 <B>downto</B> 8*(8-i-1));
+      <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rev03</FONT>;
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rev02</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>rev01</FONT>;
+
+  
+  <I><FONT COLOR=#808080>-- State select</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>StateInxD</FONT> <= (<B>others</B> => (<B>others</B> => (<B>others</B> => '0'))) <B>when</B> <FONT COLOR=#1E90FF>StateSelxS</FONT> = '0' <B>else</B> <FONT COLOR=#804040>IotaOutxD</FONT>;
+
+    
+  <I><FONT COLOR=#808080>-- New State Input</FONT></I>
+  <I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>statedn</FONT>: <B>process</B> (<FONT COLOR=#804040>DInxD</FONT>, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#804040>StateInxD</FONT>)
+  <B>begin</B>
+    <B>for</B> x <B>in</B> 0 <B>to</B> 4 <B>loop</B>
+      <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>loop</B>
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+           <FONT COLOR=#804040>StateTempxD</FONT>(x,y) <= <FONT COLOR=#804040>StateInxD</FONT>(x,y) <B>xor</B> <FONT COLOR=#804040>DInxD</FONT>(x,y);
+        <B>else</B>
+          <FONT COLOR=#804040>StateTempxD</FONT>(x,y) <= <FONT COLOR=#804040>StateInxD</FONT>(x,y);
+        <B>end</B> <B>if</B>;
+<I><FONT COLOR=#808080>--        for i in 0 to 7 loop</FONT></I>
+<I><FONT COLOR=#808080>--           StatexDN(x,y)(8*(i+1)-1 downto 8*i) StateTempxD(x,y)(8*(8-i)-1 downto 8*(8-i-1));</FONT></I>
+<I><FONT COLOR=#808080>--        end loop;  -- i</FONT></I>
+      <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- y</FONT></I>
+    <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- x</FONT></I>
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>statedn</FONT>;
+  
+  <FONT COLOR=#0000C0>statedn01</FONT>: <B>for</B> x <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+    <FONT COLOR=#0000C0>statedn02</FONT>: <B>for</B> y <B>in</B> 0 <B>to</B> 4 <B>generate</B>
+      <FONT COLOR=#0000C0>statednrev01</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+        <FONT COLOR=#804040>StatexDN</FONT>(x,y)(8*(i+1)-1 <B>downto</B> 8*i) <= <FONT COLOR=#804040>StateTempxD</FONT>(x,y)(8*(8-i)-1 <B>downto</B> 8*(8-i-1));
+      <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>statednrev01</FONT>; 
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>statedn02</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>statedn01</FONT>;
+         
+
+  <I><FONT COLOR=#808080>-- Output Unform</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>dout</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+    <FONT COLOR=#804040>DxDO</FONT>(HWIDTH-(i*64)-1 <B>downto</B> HWIDTH-(i+1)*64) <= <FONT COLOR=#804040>IotaOutxD</FONT>(i,0);
+  
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>dout</FONT>;
+ 
+
+  <I><FONT COLOR=#808080>-- Memory</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT>: <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= (<B>others</B> => (<B>others</B> => (<B>others</B> => '0')));
+            
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= <FONT COLOR=#804040>StatexDN</FONT>;
+          
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+ 
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

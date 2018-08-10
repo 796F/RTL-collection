@@ -1,0 +1,48 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/aes_sbox_logic.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;
+
+<I><FONT COLOR=#808080>-- AES sbox as combinational function</FONT></I>
+<I><FONT COLOR=#808080>-- ch.10 "FPGA and ASIC Implementatios of AES" by Kris Gaj and Pawel Chodowiec, p. 235-294</FONT></I>
+<I><FONT COLOR=#808080>-- in "Cryptographic Engineering", Springer 2009 </FONT></I>
+
+<B>entity</B> aes_sbox_logic <B>is</B>
+    <B>port</B> ( s_in : <B>in</B>  std_logic_vector (AES_SBOX_SIZE-1 <B>downto</B> 0);
+           s_out : <B>out</B>  std_logic_vector (AES_SBOX_SIZE-1 <B>downto</B> 0));
+<B>end</B> aes_sbox_logic;
+
+<B>architecture</B> aes_sbox_logic <B>of</B> aes_sbox_logic <B>is</B>
+<B>signal</B> res_mul_x, res_gf_inv, res_mul_mx : std_logic_vector (AES_SBOX_SIZE-1 <B>downto</B> 0);
+<B>constant</B> b : std_logic_vector (AES_SBOX_SIZE-1 <B>downto</B> 0) := "01100011";
+
+<B>begin</B>
+
+	res_mul_x <= mul_x(x=> s_in);
+	res_gf_inv <= gf_inv_8 (x=> res_mul_x);
+	res_mul_mx <= mul_mx (x=> res_gf_inv);
+	s_out <= b <B>xor</B> res_mul_mx;
+
+<B>end</B> aes_sbox_logic;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

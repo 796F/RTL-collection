@@ -1,0 +1,66 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/finalization.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> finalization <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>VxDI</FONT>   : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>HxDI</FONT>   : <B>in</B>  std_logic_vector(WWIDTH*8-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>SxDI</FONT>   : <B>in</B>  std_logic_vector(WWIDTH*4-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>HxDO</FONT>   : <B>out</B> std_logic_vector(WWIDTH*8-1 <B>downto</B> 0)
+    );
+
+<B>end</B> finalization;
+
+<B>architecture</B> hash <B>of</B> finalization <B>is</B>
+
+  <B>type</B> SUB4 <B>is</B> <B>array</B> (3 <B>downto</B> 0) <B>of</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  <B>type</B> SUB8 <B>is</B> <B>array</B> (7 <B>downto</B> 0) <B>of</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  <B>type</B> SUB16 <B>is</B> <B>array</B> (15 <B>downto</B> 0) <B>of</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+
+  <B>signal</B> <FONT COLOR=#804040>SINxD</FONT>         : SUB4;
+  <B>signal</B> <FONT COLOR=#804040>HINxD</FONT>, <FONT COLOR=#804040>HOUTxD</FONT> : SUB8;
+  <B>signal</B> <FONT COLOR=#804040>VxD</FONT>           : SUB16;
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- hash</FONT></I>
+
+  <FONT COLOR=#0000C0>p_unform4</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+    <FONT COLOR=#804040>SINxD</FONT>(i) <= <FONT COLOR=#804040>SxDI</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>p_unform4</FONT>;
+
+  <FONT COLOR=#0000C0>p_unform8</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+    <FONT COLOR=#804040>HINxD</FONT>(i) <= <FONT COLOR=#804040>HxDI</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i);
+    <FONT COLOR=#804040>HxDO</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i) <= <FONT COLOR=#804040>HOUTxD</FONT>(i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>p_unform8</FONT>;
+
+  <FONT COLOR=#0000C0>p_unform16</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>generate</B>
+    <FONT COLOR=#804040>VxD</FONT>(i) <= <FONT COLOR=#804040>VxDI</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>p_unform16</FONT>;
+
+  <FONT COLOR=#804040>HOUTxD</FONT>(0) <= <FONT COLOR=#804040>HINxD</FONT>(0) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(0) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(8)  <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(0);
+  <FONT COLOR=#804040>HOUTxD</FONT>(1) <= <FONT COLOR=#804040>HINxD</FONT>(1) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(1) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(9)  <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(1);
+  <FONT COLOR=#804040>HOUTxD</FONT>(2) <= <FONT COLOR=#804040>HINxD</FONT>(2) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(2) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(10) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(2);
+  <FONT COLOR=#804040>HOUTxD</FONT>(3) <= <FONT COLOR=#804040>HINxD</FONT>(3) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(3) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(11) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(3);
+  <FONT COLOR=#804040>HOUTxD</FONT>(4) <= <FONT COLOR=#804040>HINxD</FONT>(4) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(4) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(12) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(0);
+  <FONT COLOR=#804040>HOUTxD</FONT>(5) <= <FONT COLOR=#804040>HINxD</FONT>(5) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(5) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(13) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(1);
+  <FONT COLOR=#804040>HOUTxD</FONT>(6) <= <FONT COLOR=#804040>HINxD</FONT>(6) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(6) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(14) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(2);
+  <FONT COLOR=#804040>HOUTxD</FONT>(7) <= <FONT COLOR=#804040>HINxD</FONT>(7) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(7) <B>xor</B> <FONT COLOR=#804040>VxD</FONT>(15) <B>xor</B> <FONT COLOR=#804040>SINxD</FONT>(3);
+  
+<B>end</B> hash;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

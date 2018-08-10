@@ -1,0 +1,68 @@
+<HTML>
+<TITLE>
+ gmu_jh/sourcecode/jh_rd.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;	   
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_jh_package.all;
+
+<B>entity</B> jh_rd <B>is</B>
+	<B>generic</B> ( bw : integer := 1024;							<I><FONT COLOR=#808080>-- input size</FONT></I>
+			  cw : integer := 256);						<I><FONT COLOR=#808080>-- constant size		</FONT></I>
+	<B>port</B> (
+1 <B>downto</B> 0);		<I><FONT COLOR=#808080>--input</FONT></I>
+1 <B>downto</B> 0);		<I><FONT COLOR=#808080>--key	</FONT></I>
+		output 	: <B>out</B> std_logic_vector(bw-1 <B>downto</B> 0)
+	);
+<B>end</B> jh_rd;
+
+<B>architecture</B> struct <B>of</B> jh_rd <B>is</B>
+	<B>type</B> array_type <B>is</B> <B>array</B> (0 <B>to</B> cw-1) <B>of</B> std_logic_vector(3 <B>downto</B> 0);
+	<B>signal</B> aa, vv, ww, permuted : array_type;		   	
+	<B>signal</B> permuted_blk : std_logic_vector(bw-1 <B>downto</B> 0);
+<B>begin</B>
+	
+	<I><FONT COLOR=#808080>-- separate inputs into array of 4 bits word for easy processing</FONT></I>
+	<FONT COLOR=#0000C0>array4_gen</FONT> : <B>for</B> i <B>in</B> bw/4-1 <B>downto</B> 0 <B>generate</B>
+		aa(bw/4-1 - i) <= input(i*4+3 <B>downto</B> i*4);  			
+		permuted_blk(i*4+3 <B>downto</B> i*4) <= permuted(bw/4-1 - i);
+	<B>end</B> <B>generate</B>;
+	
+	<I><FONT COLOR=#808080>-- apply sbox</FONT></I>
+	<FONT COLOR=#0000C0>sbox_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> cw-1 <B>generate</B>		
+		vv(i) <= sbox_rom(conv_integer(cr(cw-1-i)),conv_integer(unsigned(aa(i))));
+	<B>end</B> <B>generate</B>;
+	
+	<I><FONT COLOR=#808080>-- apply linear transformation</FONT></I>
+	<FONT COLOR=#0000C0>lt_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> cw/2-1 <B>generate</B>
+		lt_box : <B>entity</B> work.jh_lt(struct) <B>port</B> <B>map</B> ( a => vv(2*i), b => vv(2*i+1), c => ww(2*i), d => ww(2*i+1) );
+	<B>end</B> <B>generate</B>;	
+
+	<I><FONT COLOR=#808080>-- apply permutation						</FONT></I>
+	<FONT COLOR=#0000C0>perm_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> cw/4-1 <B>generate</B>			
+		permuted(i*2)   		<= ww(4*i);
+		permuted(i*2+1) 		<= ww(4*i+3);
+		permuted(cw/2 + i*2) 	<= ww(4*i+2);
+		permuted(cw/2 + i*2+1) 	<= ww(4*i+1);			
+	<B>end</B> <B>generate</B>;		
+		
+	output <= permuted_blk;
+<B>end</B> struct;				   
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

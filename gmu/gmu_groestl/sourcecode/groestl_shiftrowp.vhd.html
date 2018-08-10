@@ -1,0 +1,88 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/groestl_shiftrowp.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+ <I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> work.sha3_pkg.all;	 
+<B>use</B> work.groestl_pkg.all;	
+
+<I><FONT COLOR=#808080>-- Groestl ShiftRow  implemented as combinational function</FONT></I>
+<I><FONT COLOR=#808080>-- possible generics values: hs = {GROESTL_DATA_SIZE_SMALL, GROESTL_DATA_SIZE_BIG} </FONT></I>
+<I><FONT COLOR=#808080>-- they are corresponding to 256 and 512 versions respectively</FONT></I>
+
+<I><FONT COLOR=#808080>-- 2011-09-28 - kgf - separated architectures</FONT></I>
+
+
+<B>entity</B> groestl_shiftrowp <B>is</B>
+<B>generic</B> (n	:integer := GROESTL_DATA_SIZE_SMALL);
+<B>port</B>( 
+	input 		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+    output 		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> groestl_shiftrowp;
+  
+<B>architecture</B> rtl <B>of</B> groestl_shiftrowp <B>is</B>
+<B>begin</B>	
+
+gen256: <B>if</B> n=GROESTL_DATA_SIZE_SMALL <B>generate</B>
+
+output <= 	input(511 <B>downto</B> 504) & input(439 <B>downto</B> 432) & input(367 <B>downto</B> 360) & input(295 <B>downto</B> 288) & 
+			input(223 <B>downto</B> 216) & input(151 <B>downto</B> 144)  & input(79 <B>downto</B> 72) & input(7 <B>downto</B> 0) &
+			input(447 <B>downto</B> 440) & input(375 <B>downto</B> 368) & input(303 <B>downto</B> 296) & input(231 <B>downto</B> 224) & 
+			input(159 <B>downto</B> 152) & input(87 <B>downto</B> 80)  & input(15 <B>downto</B> 8) & input(455 <B>downto</B> 448) &
+			input(383 <B>downto</B> 376) & input(311 <B>downto</B> 304) & input(239 <B>downto</B> 232) & input(167 <B>downto</B> 160) & 
+			input(95 <B>downto</B> 88) & input(23 <B>downto</B> 16)  & input(463 <B>downto</B> 456) & input(391 <B>downto</B> 384) &
+			input(319 <B>downto</B> 312) & input(247 <B>downto</B> 240) & input(175 <B>downto</B> 168) & input(103 <B>downto</B> 96) & 
+			input(31 <B>downto</B> 24) & input(471 <B>downto</B> 464)  & input(399 <B>downto</B> 392) & input(327 <B>downto</B> 320) &
+			input(255 <B>downto</B> 248) & input(183 <B>downto</B> 176) & input(111 <B>downto</B> 104) & input(39 <B>downto</B> 32) & 
+			input(479 <B>downto</B> 472) & input(407 <B>downto</B> 400)  & input(335 <B>downto</B> 328) & input(263 <B>downto</B> 256) &
+			input(191 <B>downto</B> 184) & input(119 <B>downto</B> 112) & input(47 <B>downto</B> 40) & input(487 <B>downto</B> 480) & 
+			input(415 <B>downto</B> 408) & input(343 <B>downto</B> 336)  & input(271 <B>downto</B> 264) & input(199 <B>downto</B> 192) &
+			input(127 <B>downto</B> 120) & input(55 <B>downto</B> 48) & input(495 <B>downto</B> 488) & input(423 <B>downto</B> 416) & 
+			input(351 <B>downto</B> 344) & input(279 <B>downto</B> 272)  & input(207 <B>downto</B> 200) & input(135 <B>downto</B> 128) &
+			input(63 <B>downto</B> 56) & input(503 <B>downto</B> 496) & input(431 <B>downto</B> 424) & input(359 <B>downto</B> 352) & 
+			input(287 <B>downto</B> 280) & input(215 <B>downto</B> 208)  & input(143 <B>downto</B> 136) & input(71 <B>downto</B> 64);
+<B>end</B> <B>generate</B>;
+
+
+gen512: <B>if</B> n=GROESTL_DATA_SIZE_BIG <B>generate</B>
+
+output <= 	input(1023 <B>downto</B> 1016) & input(951 <B>downto</B> 944) & input(879 <B>downto</B> 872) & input(807 <B>downto</B> 800) & input(735 <B>downto</B> 728) & input(663 <B>downto</B> 656) & input(591 <B>downto</B> 584) & input(263 <B>downto</B> 256) & 
+			input(959 <B>downto</B> 952) & input(887 <B>downto</B> 880) & input(815 <B>downto</B> 808) & input(743 <B>downto</B> 736) & input(671 <B>downto</B> 664) & input(599 <B>downto</B> 592) & input(527 <B>downto</B> 520) & input(199 <B>downto</B> 192) &
+			input(895 <B>downto</B> 888) & input(823 <B>downto</B> 816) & input(751 <B>downto</B> 744) & input(679 <B>downto</B> 672) & input(607 <B>downto</B> 600) & input(535 <B>downto</B> 528) & input(463 <B>downto</B> 456) & input(135 <B>downto</B> 128) & 
+			input(831 <B>downto</B> 824) & input(759 <B>downto</B> 752) & input(687 <B>downto</B> 680) & input(615 <B>downto</B> 608) & input(543 <B>downto</B> 536) & input(471 <B>downto</B> 464) & input(399 <B>downto</B> 392) & input(71 <B>downto</B> 64) &
+			input(767 <B>downto</B> 760) & input(695 <B>downto</B> 688) & input(623 <B>downto</B> 616) & input(551 <B>downto</B> 544) & input(479 <B>downto</B> 472) & input(407 <B>downto</B> 400) &	input(335 <B>downto</B> 328) &	input(7 <B>downto</B> 0) &	 	
+			input(703 <B>downto</B> 696) & input(631 <B>downto</B> 624) & input(559 <B>downto</B> 552) & input(487 <B>downto</B> 480) & input(415 <B>downto</B> 408) & input(343 <B>downto</B> 336) & input(271 <B>downto</B> 264) & input(967 <B>downto</B> 960) & 
+			input(639 <B>downto</B> 632) & input(567 <B>downto</B> 560) & input(495 <B>downto</B> 488) & input(423 <B>downto</B> 416) & input(351 <B>downto</B> 344) & input(279 <B>downto</B> 272) & input(207 <B>downto</B> 200) & input(903 <B>downto</B> 896) & 
+			input(575 <B>downto</B> 568) & input(503 <B>downto</B> 496) & input(431 <B>downto</B> 424) & input(359 <B>downto</B> 352) & input(287 <B>downto</B> 280) & input(215 <B>downto</B> 208) & input(143 <B>downto</B> 136) & input(839 <B>downto</B> 832) & 
+			input(511 <B>downto</B> 504) & input(439 <B>downto</B> 432) & input(367 <B>downto</B> 360) & input(295 <B>downto</B> 288) & input(223 <B>downto</B> 216) & input(151 <B>downto</B> 144) & input(79 <B>downto</B> 72) & input(775 <B>downto</B> 768) & 
+			input(447 <B>downto</B> 440) & input(375 <B>downto</B> 368) & input(303 <B>downto</B> 296) & input(231 <B>downto</B> 224) & input(159 <B>downto</B> 152) & input(87 <B>downto</B> 80)  & input(15 <B>downto</B> 8) & input(711 <B>downto</B> 704) & 
+			input(383 <B>downto</B> 376) & input(311 <B>downto</B> 304) & input(239 <B>downto</B> 232) & input(167 <B>downto</B> 160) & input(95 <B>downto</B> 88)   & input(23 <B>downto</B> 16) & input(975 <B>downto</B> 968)   & input(647 <B>downto</B> 640) & 
+			input(319 <B>downto</B> 312) & input(247 <B>downto</B> 240) & input(175 <B>downto</B> 168) & input(103 <B>downto</B> 96)  & input(31 <B>downto</B> 24) & input(983 <B>downto</B> 976)   & input(911 <B>downto</B> 904) & input(583 <B>downto</B> 576) & 
+			input(255 <B>downto</B> 248) & input(183 <B>downto</B> 176) & input(111 <B>downto</B> 104) & input(39 <B>downto</B> 32) & input(991 <B>downto</B> 984)   & input(919 <B>downto</B> 912) & input(847 <B>downto</B> 840) & input(519 <B>downto</B> 512) & 
+			input(191 <B>downto</B> 184) & input(119 <B>downto</B> 112) & input(47 <B>downto</B> 40) & input(999 <B>downto</B> 992)   & input(927 <B>downto</B> 920) & input(855 <B>downto</B> 848) & input(783 <B>downto</B> 776) & input(455 <B>downto</B> 448) & 
+			input(127 <B>downto</B> 120) & input(55 <B>downto</B> 48) & input(1007 <B>downto</B> 1000) & input(935 <B>downto</B> 928) & input(863 <B>downto</B> 856) & input(791 <B>downto</B> 784) & input(719 <B>downto</B> 712) & input(391 <B>downto</B> 384) & 
+			input(63 <B>downto</B> 56) & input(1015 <B>downto</B> 1008) & input(943 <B>downto</B> 936) & input(871 <B>downto</B> 864) & input(799 <B>downto</B> 792) & input(727 <B>downto</B> 720) & input(655 <B>downto</B> 648) & input(327 <B>downto</B> 320);
+<B>end</B> <B>generate</B>;
+
+
+<B>end</B> <B>architecture</B> <FONT COLOR=#0000C0>rtl</FONT>; 
+
+  
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

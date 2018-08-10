@@ -1,0 +1,214 @@
+<HTML>
+<TITLE>
+ ethz_jh/sourcecode/ethz_jh.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : jh 256</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_jh.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Beat Muheim  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-19</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-25</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: jh 256 (constant) original writen by </FONT></I>
+<I><FONT COLOR=#808080>--              Patrice Guillet, Enrico Pargaetzi and Martin Zollerf</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-19  1.0      bm	creat</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-25  1.1      bm      rename jh_con.vhd to ethz_jh.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-10  1.2      bm      removed Rlast, add NewBlockSO replace InWrEnxS</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> ethz_jh <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#804040>MsgInxDI</FONT>       : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+    <FONT COLOR=#804040>HashOutxDO</FONT>     : <B>out</B> std_logic_vector(255 <B>downto</B> 0));
+
+<B>end</B> ethz_jh;
+
+<B>architecture</B> rtl <B>of</B> ethz_jh <B>is</B>
+
+  <B>type</B> HGroup <B>is</B> <B>array</B> (0 <B>to</B> 255) <B>of</B> std_logic_vector (3 <B>downto</B> 0);
+                                        <I><FONT COLOR=#808080>-- type definition of 4bit group elements</FONT></I>
+  <B>type</B> SBOX <B>is</B> <B>array</B> (0 <B>to</B> 15) <B>of</B> std_logic_vector (3 <B>downto</B> 0);
+  <B>type</B> CR <B>is</B> <B>array</B> (0 <B>to</B> 41) <B>of</B> std_logic_vector(255 <B>downto</B> 0);
+
+  <B>component</B> JFSM
+    <B>port</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+      <FONT COLOR=#804040>CntxDO</FONT>         : <B>out</B> unsigned(7 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>SavexSO</FONT>        : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      : <B>out</B> std_logic;
+      NewBlockSO     : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic);
+  <B>end</B> <B>component</B>;
+
+  <B>signal</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT>, NewBlockS, <FONT COLOR=#1E90FF>SavexS</FONT>                      : std_logic;
+  <B>signal</B> <FONT COLOR=#804040>HxDP</FONT>, <FONT COLOR=#804040>HxDN</FONT>                                       : HGroup;
+  <B>signal</B> <FONT COLOR=#804040>MxDP</FONT>, <FONT COLOR=#804040>MxDN</FONT>                                       : std_logic_vector(511 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>HDegroupedxD</FONT>, <FONT COLOR=#804040>HFinalxD</FONT>, A                        : std_logic_vector(1023 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CntxD</FONT>                                            : unsigned(7 <B>downto</B> 0);
+  <B>signal</B> Group1, Temp1, Temp2, Temp3, Temp4, Temp5, Temp6 : HGroup;
+  <B>signal</B> C0, C1, C2, C3, D0, D1, D2, D3                   : std_logic_vector(127 <B>downto</B> 0);
+
+  <B>constant</B> S0 : SBOX := ("1001", "0000", "0100", "1011", "1101", "1100", "0011", "1111", "0001", "1010", "0010", "0110", "0111", "0101", "1000", "1110");
+  <B>constant</B> S1 : SBOX := ("0011", "1100", "0110", "1101", "0101", "0111", "0001", "1001", "1111", "0010", "0000", "0100", "1011", "1010", "1110", "1000");
+
+  <B>constant</B> constants : CR := (x"6a09e667f3bcc908b2fb1366ea957d3e3adec17512775099da2f590b0667322a", x"bb896bf05955abcd5281828d66e7d99ac4203494f89bf12817deb43288712231", x"1836e76b12d79c55118a1139d2417df52a2021225ff6350063d88e5f1f91631c", x"263085a7000fa9c3317c6ca8ab65f7a7713cf4201060ce886af855a90d6a4eed", x"1cebafd51a156aeb62a11fb3be2e14f60b7e48de85814270fd62e97614d7b441", x"e5564cb574f7e09c75e2e244929e9549279ab224a28e445d57185e7d7a09fdc1", x"5820f0f0d764cff3a5552a5e41a82b9eff6ee0aa615773bb07e8603424c3cf8a", x"b126fb741733c5bfcef6f43a62e8e5706a26656028aa897ec1ea4616ce8fd510", x"dbf0de32bca77254bb4f562581a3bc991cf94f225652c27f14eae958ae6aa616", x"e6113be617f45f3de53cff03919a94c32c927b093ac8f23b47f7189aadb9bc67", x"80d0d26052ca45d593ab5fb3102506390083afb5ffe107dacfcba7dbe601a12b", x"43af1c76126714dfa950c368787c81ae3beecf956c85c962086ae16e40ebb0b4", x"9aee8994d2d74a5cdb7b1ef294eed5c1520724dd8ed58c92d3f0e174b0c32045", x"0b2aa58ceb3bdb9e1eef66b376e0c565d5d8fe7bacb8da866f859ac521f3d571", x"7a1523ef3d970a3a9b0b4d610e02749d37b8d57c1885fe4206a7f338e8356866", x"2c2db8f7876685f2cd9a2e0ddb64c9d5bf13905371fc39e0fa86e1477234a297", x"9df085eb2544ebf62b50686a71e6e828dfed9dbe0b106c9452ceddff3d138990", x"e6e5c42cb2d460c9d6e4791a1681bb2e222e54558eb78d5244e217d1bfcf5058", x"8f1f57e44e126210f00763ff57da208a5093b8ff7947534a4c260a17642f72b2", x"ae4ef4792ea148608cf116cb2bff66e8fc74811266cd641112cd17801ed38b59", x"91a744efbf68b192d0549b608bdb3191fc12a0e83543cec5f882250b244f78e4", x"4b5d27d3368f9c17d4b2a2b216c7e74e7714d2cc03e1e44588cd9936de74357c", x"0ea17cafb8286131bda9e3757b3610aa3f77a6d0575053fc926eea7e237df289", x"848af9f57eb1a616e2c342c8cea528b8a95a5d16d9d87be9bb3784d0c351c32b", x"c0435cc3654fb85dd9335ba91ac3dbde1f85d567d7ad16f9de6e009bca3f95b5", x"927547fe5e5e45e2fe99f1651ea1cbf097dc3a3d40ddd21cee260543c288ec6b", x"c117a3770d3a34469d50dfa7db020300d306a365374fa828c8b780ee1b9d7a34", x"8ff2178ae2dbe5e872fac789a34bc228debf54a882743caad14f3a550fdbe68f", x"abd06c52ed58ff091205d0f627574c8cbc1fe7cf79210f5a2286f6e23a27efa0", x"631f4acb8d3ca4253e301849f157571d3211b6c1045347befb7c77df3c6ca7bd", x"ae88f2342c23344590be2014fab4f179fd4bf7c90db14fa4018fcce689d2127b", x"93b89385546d71379fe41c39bc602e8b7c8b2f78ee914d1f0af0d437a189a8a4", x"1d1e036abeef3f44848cd76ef6baa889fcec56cd7967eb909a464bfc23c72435", x"a8e4ede4c5fe5e88d4fb192e0a0821e935ba145bbfc59c2508282755a5df53a5", x"8e4e37a3b970f079ae9d22a499a714c875760273f74a9398995d32c05027d810", x"61cfa42792f93b9fde36eb163e978709fafa7616ec3c7dad0135806c3d91a21b", x"f037c5d91623288b7d0302c1b941b72676a943b372659dcd7d6ef408a11b40c0", x"2a306354ca3ea90b0e97eaebcea0a6d7c6522399e885c613de824922c892c490", x"3ca6cdd788a5bdc5ef2dceeb16bca31e0a0d2c7e9921b6f71d33e25dd2f3cf53", x"f72578721db56bf8f49538b0ae6ea470c2fb1339dd26333f135f7def45376ec0", x"e449a03eab359e34095f8b4b55cd7ac7c0ec6510f2c4cc79fa6b1fee6b18c59e", x"73bd6978c59f2b219449b36770fb313fbe2da28f6b04275f071a1b193dde2072");
+
+<I><FONT COLOR=#808080>--  constant IV : Hgroup := ("1001", "0000", "1100", "1110", "0100", "1100", "0111", "0001", "1101", "0010", "0011", "0011", "0101", "0101", "1101", "1000", "0000", "0010", "1001", "1011", "1110", "0101", "0011", "0001", "1110", "0010", "0011", "1010", "0011", "0010", "0101", "1000", "1110", "1101", "0001", "0001", "1001", "1111", "1101", "1111", "1010", "0101", "0010", "1100", "0001", "1111", "0100", "1000", "1110", "1100", "1101", "1100", "1011", "0001", "0011", "1011", "0011", "1111", "0000", "0011", "1010", "0111", "0101", "1000", "1100", "0100", "1011", "0001", "0110", "0000", "0101", "0101", "0111", "0001", "1011", "1011", "0001", "1011", "1111", "0011", "0001", "0001", "0001", "1010", "1010", "1000", "1111", "1111", "1100", "0110", "0000", "0010", "1000", "0100", "0111", "1110", "0000", "0010", "1000", "0111", "0110", "0011", "1010", "1101", "1100", "1101", "0001", "1111", "0000", "1001", "1110", "1111", "0101", "0100", "1100", "1100", "1101", "1000", "0000", "1111", "1000", "1100", "1011", "0101", "1100", "1101", "0001", "0101", "0111", "0101", "1101", "0101", "0011", "1001", "0011", "0110", "0000", "1010", "0100", "1000", "1000", "1111", "0000", "1110", "0011", "1111", "1010", "1000", "1111", "0110", "1001", "0100", "1101", "0011", "1010", "1001", "1110", "1101", "0110", "1001", "0001", "0001", "1100", "1001", "0001", "1000", "0001", "0000", "0100", "0000", "1101", "0100", "0001", "0000", "1000", "1100", "1100", "0010", "1110", "1111", "1101", "1111", "0011", "1000", "1000", "1010", "1011", "0011", "1000", "0100", "1100", "0100", "0110", "0111", "0000", "0011", "0001", "0011", "1010", "0000", "1100", "0100", "1101", "1101", "0000", "1111", "1001", "0001", "0101", "1100", "1111", "0001", "1001", "1101", "1011", "0000", "1000", "1001", "0101", "0100", "1010", "0110", "0101", "1101", "1101", "0101", "1010", "0010", "1111", "1101", "0011", "0010", "0000", "0101", "1000", "0101", "1111", "1000", "0000", "0010", "1100", "0001", "1110", "0110", "1011", "0010", "0111", "0111", "0001", "0110", "1100", "0100", "0100", "0100", "1010", "1100");</FONT></I>
+
+  <B>constant</B> IV : std_logic_vector(1023 <B>downto</B> 0) := x"EB98A3412C20D3EB92CDBE7B9CB245C11C93519160D4C7FA260082D67E508A03A4239E267726B945E0FB1A48D41A9477CDB5AB26026B177A56F024420FFF2FA871A396897F2E4D751D144908F77DE262277695F776248F9487D5B6574780296C5C5E272DAC8E0D6C518450C657057A0F7BE4D367702412EA89E3AB13D31CD769";
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  controller : JFSM
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         => <FONT COLOR=#32CD32>ClkxCI</FONT>,
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        => <FONT COLOR=#FF6347>RstxRBI</FONT>,
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>,
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>,
+      <FONT COLOR=#804040>CntxDO</FONT>         => <FONT COLOR=#804040>CntxD</FONT>,
+      <FONT COLOR=#1E90FF>SavexSO</FONT>        => <FONT COLOR=#1E90FF>SavexS</FONT>,
+      <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      => <FONT COLOR=#1E90FF>NewMsgxS</FONT>,
+      NewBlockSO     => NewBlockS,
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,
+      <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     => <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>);
+
+
+
+  <I><FONT COLOR=#808080>-- INITIALIZATION</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+
+  <FONT COLOR=#804040>MxDN</FONT> <= <FONT COLOR=#804040>MsgInxDI</FONT> <B>when</B> NewBlockS = '1' <B>else</B> <FONT COLOR=#804040>MxDP</FONT>;
+
+  <FONT COLOR=#0000C0>HxorM</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 511 <B>generate</B>
+    A(512+i)        <= IV(512+i) <B>xor</B> <FONT COLOR=#804040>MsgInxDI</FONT>(i) <B>when</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT> = '1' <B>else</B> <FONT COLOR=#804040>HFinalxD</FONT>(512+i) <B>xor</B> <FONT COLOR=#804040>MsgInxDI</FONT>(i);
+    A(i)            <= IV(i)                     <B>when</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT> = '1' <B>else</B> <FONT COLOR=#804040>HFinalxD</FONT>(i);
+    <FONT COLOR=#804040>HFinalxD</FONT>(512+i) <= <FONT COLOR=#804040>HDegroupedxD</FONT>(512+i);
+    <FONT COLOR=#804040>HFinalxD</FONT>(i)     <= <FONT COLOR=#804040>HDegroupedxD</FONT>(i) <B>xor</B> <FONT COLOR=#804040>MxDP</FONT>(i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>HxorM</FONT>;
+
+  <I><FONT COLOR=#808080>-- GROUP</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>grouping</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 127 <B>generate</B>
+    Group1(2*i)   <= (A(1023-i), A(767-i), A(511-i), A(255-i));
+    Group1(2*i+1) <= (A(895-i), A(639-i), A(383-i), A(127-i));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>grouping</FONT>;
+
+
+<I><FONT COLOR=#808080>-- Round8</FONT></I>
+<I><FONT COLOR=#808080>--------------------------------------------------------------------------------</FONT></I>
+
+  Temp1 <= Group1 <B>when</B> NewBlockS = '1' <B>else</B> <FONT COLOR=#804040>HxDP</FONT>;
+
+  <FONT COLOR=#0000C0>sub</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 255 <B>generate</B>      <I><FONT COLOR=#808080>-- Sub 4bits with SBOX SO or S1</FONT></I>
+                                        <I><FONT COLOR=#808080>-- (depending on constant vector)</FONT></I>
+i) = '0' <B>else</B> S1(to_integer(unsigned(Temp1(i)(3 <B>downto</B> 0))));  <I><FONT COLOR=#808080>--SBOX</FONT></I>
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>sub</FONT>;
+
+  <FONT COLOR=#0000C0>L</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 127 <B>generate</B>        <I><FONT COLOR=#808080>--Linear Transformation</FONT></I>
+    D0(i) <= Temp2(2*i+1)(3) <B>xor</B> Temp2(2*i)(2);
+    D1(i) <= Temp2(2*i+1)(2) <B>xor</B> Temp2(2*i)(1);
+    D2(i) <= Temp2(2*i+1)(1) <B>xor</B> Temp2(2*i)(0) <B>xor</B> Temp2(2*i)(3);
+    D3(i) <= Temp2(2*i+1)(0) <B>xor</B> Temp2(2*i)(3);
+
+    C0(i) <= Temp2(2*i)(3) <B>xor</B> D1(i);
+    C1(i) <= Temp2(2*i)(2) <B>xor</B> D2(i);
+    C2(i) <= Temp2(2*i)(1) <B>xor</B> D3(i) <B>xor</B> D0(i);
+    C3(i) <= Temp2(2*i)(0) <B>xor</B> D0(i);
+
+
+    Temp3(2*i)   <= (C0(i) , C1(i) , C2(i) , C3(i));
+    Temp3(2*i+1) <= (D0(i) , D1(i) , D2(i) , D3(i));
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>L</FONT>;
+
+  <FONT COLOR=#0000C0>pi</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 63 <B>generate</B>        <I><FONT COLOR=#808080>-- Permutation P8</FONT></I>
+    Temp4(4*i)   <= Temp3(4*i);
+    Temp4(4*i+1) <= Temp3(4*i+1);
+    Temp4(4*i+2) <= Temp3(4*i+3);
+    Temp4(4*i+3) <= Temp3(4*i+2);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>pi</FONT>;
+
+  <FONT COLOR=#0000C0>pprime</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 127 <B>generate</B>
+    Temp5(i)     <= Temp4(2*i);
+    Temp5(i+128) <= Temp4(2*i+1);
+    Temp6(i)     <= Temp5(i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>pprime</FONT>;
+
+  <FONT COLOR=#0000C0>phi</FONT> : <B>for</B> i <B>in</B> 64 <B>to</B> 127 <B>generate</B>
+    Temp6(2*i)   <= Temp5(2*i+1);
+    Temp6(2*i+1) <= Temp5(2*i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>phi</FONT>;
+
+  <I><FONT COLOR=#808080>--SAVE STATE</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>HxDN</FONT> <= Temp6 <B>when</B> <FONT COLOR=#1E90FF>SavexS</FONT> = '0' <B>else</B> <FONT COLOR=#804040>HxDP</FONT>;
+
+  <I><FONT COLOR=#808080>--DEGROUP</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>degroupelement</FONT> : <B>for</B> j <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+    <FONT COLOR=#0000C0>degroup</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 127 <B>generate</B>
+      <FONT COLOR=#804040>HDegroupedxD</FONT>(1023-256*j-i) <= <FONT COLOR=#804040>HxDP</FONT>(2*i)(3-j);
+      <FONT COLOR=#804040>HDegroupedxD</FONT>(895-256*j-i)  <= <FONT COLOR=#804040>HxDP</FONT>(2*i+1)(3-j);
+    <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>degroup</FONT>;
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>degroupelement</FONT>;
+
+
+<I><FONT COLOR=#808080>--Output</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>HashOutxDO</FONT> <= <FONT COLOR=#804040>HFinalxD</FONT>(255 <B>downto</B> 0);
+
+
+  <I><FONT COLOR=#808080>-- Memory</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>MxDP</FONT> <= (<B>others</B> => '0');
+      <FONT COLOR=#804040>HxDP</FONT> <= (<B>others</B> => (<B>others</B> => '0'));
+      
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>MxDP</FONT> <= <FONT COLOR=#804040>MxDN</FONT>;
+      <FONT COLOR=#804040>HxDP</FONT> <= <FONT COLOR=#804040>HxDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+  
+
+<B>end</B> rtl;
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

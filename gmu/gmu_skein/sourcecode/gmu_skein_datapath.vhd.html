@@ -1,0 +1,190 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/gmu_skein_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+
+<B>use</B> work.sha3_skein_package.ALL;
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> gmu_skein_datapath <B>is</B>
+	<B>generic</B> ( 	
+		version : integer := SHA3_ROUND3;
+		adder_type : integer := SCCA_BASED;
+		h : integer := HASH_SIZE_256 );
+	<B>port</B> (
+		<I><FONT COLOR=#808080>-- external</FONT></I>
+		clk : <B>in</B> std_logic;
+		rst : <B>in</B> std_logic;
+		din  : <B>in</B> std_logic_vector(511 <B>downto</B> 0);	
+		dout : <B>out</B> std_logic_vector(h-1 <B>downto</B> 0);	
+		tw_position64 : <B>in</B> std_logic_vector(63 <B>downto</B> 0);
+				
+		<I><FONT COLOR=#808080>-- control signals</FONT></I>
+		er 		: <B>in</B> std_logic;
+		sf 		: <B>in</B> std_logic;		<I><FONT COLOR=#808080>-- 1 for first block of a message		</FONT></I>
+		sfinal 	: <B>in</B> std_logic; 	 <I><FONT COLOR=#808080>-- 0 for msg, 1 for output</FONT></I>
+		slast 	: <B>in</B> std_logic;  <I><FONT COLOR=#808080>-- 1 for last block and output , 0 else</FONT></I>
+		snb		: <B>in</B> std_logic
+	);				  
+<B>end</B> gmu_skein_datapath;
+
+<B>architecture</B> struct <B>of</B> gmu_skein_datapath <B>is</B>   	
+	<I><FONT COLOR=#808080>------ Constants						  	</FONT></I>
+	<B>constant</B> nw : integer := 8; <I><FONT COLOR=#808080>-- fixed</FONT></I>
+	<B>constant</B> b : integer := 512; <I><FONT COLOR=#808080>-- fixed	   </FONT></I>
+	<B>constant</B> bzeros 	: std_logic_vector(b-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> mw			: integer := b;		<I><FONT COLOR=#808080>-- message width	</FONT></I>
+	<B>constant</B> log2mw : integer := log2(mw);						
+	<B>constant</B> log2mwzeros : std_logic_vector(log2mw-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> mwzeros	: std_logic_vector(mw-1 <B>downto</B> 0) := (<B>others</B> => '0');  
+	<B>constant</B> perm : permute_type (0 <B>to</B> nw-1) := get_perm( b );
+	<B>constant</B> rot : rot_type (0 <B>to</B> nw/2-1,0 <B>to</B> 7) := get_rot( b );  
+	<B>constant</B> iv : std_logic_vector(b-1 <B>downto</B> 0) := get_iv( h, version );																			  
+	<B>constant</B> sixteenzeros : std_logic_vector(15 <B>downto</B> 0) := (<B>others</B> => '0');	 
+	<B>constant</B> seventyone0 : std_logic_vector(70 <B>downto</B> 0) := (<B>others</B> =>'0');
+	<B>constant</B> remzeros : std_logic_vector(log2mw-4 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> remones : std_logic_vector(log2mw-4 <B>downto</B> 0) := (<B>others</B> => '1');		
+	<I><FONT COLOR=#808080>----------	</FONT></I>
+
+	<I><FONT COLOR=#808080>-- TWEAK</FONT></I>
+	<B>signal</B> tweak : std_logic_vector(127 <B>downto</B> 0);				  
+	<B>constant</B> tw_tree_level : std_logic_vector(6 <B>downto</B> 0) := (<B>others</B> =>'0');
+	<B>constant</B> tw_reserved : std_logic_vector(15 <B>downto</B> 0) := (<B>others</B> =>'0');	
+	<B>constant</B> tw_bit_pad : std_logic := '0'; <I><FONT COLOR=#808080>-- bit pad always '0' as message will be multiple of a byte</FONT></I>
+	<B>constant</B> zeros : std_logic_vector(31 <B>downto</B> 0) := (<B>others</B> => '0'); <I><FONT COLOR=#808080>-- fill the rest of tweak's position</FONT></I>
+	<B>signal</B> tw_type  : std_logic_vector(5 <B>downto</B> 0);
+	<B>signal</B> tw_final, tw_first : std_logic;
+	<B>signal</B> tw_position : std_logic_vector(63 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>-- ROUND SIGNALS			 </FONT></I>
+	<B>signal</B> min,min_endian1,min_endian2, msg : std_logic_vector(mw-1 <B>downto</B> 0);
+	<B>signal</B> r, rmux, rp : std_logic_vector(b-1 <B>downto</B> 0);	
+	<B>signal</B> threefish, cv,  keyin : std_logic_vector(b-1 <B>downto</B> 0);	  
+	<B>signal</B> switch_out, switch1, switch2 : std_logic_vector(h-1 <B>downto</B> 0);
+	<B>signal</B> keyout  : key_array(nw-1 <B>downto</B> 0);	
+	<B>signal</B> keyinj : key_array(nw-1 <B>downto</B> 0);	
+	<B>signal</B> round : round_array(0 <B>to</B> 4, nw-1 <B>downto</B> 0);	
+	<B>signal</B> roundout : round_array(0 <B>to</B> 3, nw-1 <B>downto</B> 0);	  
+	
+	<I><FONT COLOR=#808080>-- 4x</FONT></I>
+	<B>signal</B> sshalf : std_logic;		
+<B>begin</B>														
+	tw_type <= TW_OUT_CONS <B>when</B> sfinal = '1' <B>else</B> TW_MSG_CONS; 
+	tw_final  <= (slast <B>or</B> sfinal);
+	tw_first  <= (sf <B>or</B> sfinal);   
+	tw_position <= conv_std_logic_vector(8,64) <B>when</B> sfinal = '1' <B>else</B> tw_position64;
+	
+	<I><FONT COLOR=#808080>-- tweak		</FONT></I>
+	tweak <= tw_final & tw_first  & tw_type & tw_bit_pad & tw_tree_level & tw_reserved & zeros & tw_position;
+	
+	<I><FONT COLOR=#808080>-- input																										 </FONT></I>
+	min_endian1 <= switch_endian_byte(din,b,64);
+	min_endian2 <= switch_endian_word(min_endian1,b,64);
+
+	<FONT COLOR=#0000C0>msgRegGen</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>		
+		<B>if</B> ( rst = '0' ) <B>then</B>
+			msg <= (<B>others</B> => '0');
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> ( sfinal = '1' ) <B>then</B>
+				msg <= (<B>others</B> => '0');
+			<B>elsif</B> ( snb = '1' ) <B>then</B>
+				msg <= min_endian2;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>process</B>;
+	
+	rmux <= min_endian2 <B>when</B> snb = '1' <B>else</B> rp;
+	<FONT COLOR=#0000C0>r_reg</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>		
+		<B>if</B> ( rst = '0' ) <B>then</B>
+			r <= (<B>others</B> => '0');
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> ( sfinal = '1' ) <B>then</B>
+				r <= (<B>others</B> => '0');
+			<B>elsif</B> ( er = '1' ) <B>then</B>
+				r <= rmux;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>process</B>;	
+	
+	<I><FONT COLOR=#808080>-----------------------</FONT></I>
+	<I><FONT COLOR=#808080>--------- ROUND -------</FONT></I>
+	<FONT COLOR=#0000C0>inout_gen</FONT> : <B>for</B> i <B>in</B> nw-1 <B>downto</B> 0 <B>generate</B>
+		round(0,i) <= r(iw*(i+1)-1 <B>downto</B> iw*i);
+		rp(iw*(i+1)-1 <B>downto</B> iw*i) <= round(4,i);
+	<B>end</B> <B>generate</B>;		
+		
+	<I><FONT COLOR=#808080>-- cntrl signal	</FONT></I>
+	<B>process</B> ( clk )	   
+	<B>begin</B>
+		<B>if</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> ( snb = '1' ) <B>then</B>
+				sshalf <= '0';
+			<B>elsif</B> ( er = '1' ) <B>then</B>
+				sshalf <= <B>not</B> sshalf;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>process</B>;	
+	
+	<I><FONT COLOR=#808080>-- core</FONT></I>
+	<FONT COLOR=#0000C0>row_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+		key_inj : <B>if</B> ( i mod 4 = 0 ) <B>generate</B>																								
+			<FONT COLOR=#0000C0>keyinj_gen</FONT> : <B>for</B> j <B>in</B> nw-1 <B>downto</B> 0 <B>generate</B> 
+				add_call : adder <B>generic</B> <B>map</B> ( adder_type => adder_type, n => 64 ) <B>port</B> <B>map</B> ( a => keyout(j), b => round(i,j) , s => keyinj(j));
+			<B>end</B> <B>generate</B>;			
+			<FONT COLOR=#0000C0>mix_gen_gen</FONT> : <B>for</B> j <B>in</B> 0 <B>to</B> nw/2-1 <B>generate</B>
+				mix_gen : <B>entity</B> work.skein_mix_4r(struct) <B>generic</B> <B>map</B> ( adder_type => adder_type, rotate_0 => rot(j,i), rotate_1 => rot(j,i+4) ) <B>port</B> <B>map</B> ( sel => sshalf, a => keyinj(2*j), b => keyinj(2*j+1), c => roundout(i,2*j), d => roundout(i,2*j+1) );
+			<B>end</B> <B>generate</B>;
+		<B>end</B> <B>generate</B>;
+		nokey_inj : <B>if</B> (i mod 4 /= 0 ) <B>generate</B>	
+			<FONT COLOR=#0000C0>mix_gen_gen</FONT> : <B>for</B> j <B>in</B> 0 <B>to</B> nw/2-1 <B>generate</B>
+				mix_gen_r : <B>entity</B> work.skein_mix_4r(struct) <B>generic</B> <B>map</B> (adder_type => adder_type,  rotate_0 => rot(j,i), rotate_1 => rot(j,i+4) ) <B>port</B> <B>map</B> ( sel => sshalf, a => round(i,2*j), b => round(i,2*j+1), c => roundout(i,2*j), d => roundout(i,2*j+1) );
+			<B>end</B> <B>generate</B>;
+		<B>end</B> <B>generate</B>;
+	<B>end</B> <B>generate</B>;			  
+	
+	<FONT COLOR=#0000C0>perm1</FONT>: <B>for</B> i <B>in</B> 1 <B>to</B> 4 <B>generate</B> 
+		<FONT COLOR=#0000C0>perm2</FONT> : <B>for</B> j <B>in</B> 0 <B>to</B> nw-1 <B>generate</B>
+			round(i,j) <= roundout(i-1,perm(j));
+		<B>end</B> <B>generate</B>;
+	<B>end</B> <B>generate</B>;
+	<I><FONT COLOR=#808080>--------- ROUND -------</FONT></I>
+	<I><FONT COLOR=#808080>-----------------------			   </FONT></I>
+	
+	<FONT COLOR=#0000C0>threefish_out_gen</FONT> : <B>for</B> i <B>in</B> nw-1 <B>downto</B> 0 <B>generate</B>
+		threefish(64*(i+1)-1 <B>downto</B> 64*i) <= keyinj(i);
+	<B>end</B> <B>generate</B>;
+	cv <= threefish <B>xor</B> msg;
+	
+	keyin <= iv <B>when</B> sf = '1' <B>else</B> cv;
+	keygen_gen : <B>entity</B> work.skein_keygen(struct) 
+		<B>generic</B> <B>map</B> (version => version, adder_type => adder_type, b => b, nw => nw) 
+		<B>port</B> <B>map</B> ( clk => clk, rst => rst, load => snb, en => er, keyin => keyin, tweak => tweak, keyout => keyout );
+	
+	switch_out <= cv(h-1 <B>downto</B> 0);
+	switch1 <= switch_endian_word(switch_out, h, iw); 
+	switch2 <= switch_endian_byte(switch1,h,iw);
+	dout <= switch2;	
+
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

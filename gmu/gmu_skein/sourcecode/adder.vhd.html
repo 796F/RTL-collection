@@ -1,0 +1,56 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/adder.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- ======================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> adder <B>is</B> 
+	<B>generic</B> (
+		adder_type : integer:= SCCA_BASED; <I><FONT COLOR=#808080>-- standard carry chain adder by default</FONT></I>
+		n : integer := 64);
+	<B>port</B>(
+		a : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		b : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s : <B>out</B> std_logic_vector(n-1 <B>downto</B> 0)
+	);		
+<B>end</B> adder;
+
+<B>architecture</B> struct <B>of</B> adder <B>is</B> 
+
+<B>begin</B>
+	FCC_GEN : <B>if</B> adder_type = SCCA_BASED <B>generate</B>
+		s <= a + b;
+	<B>end</B> <B>generate</B>;
+	CLA_GEN64 : <B>if</B> ((adder_type = CLA_BASED) <B>and</B> (n = 64)) <B>generate</B>
+		cla_call : <B>entity</B> work.cla_64(struct) <B>port</B> <B>map</B> ( a => a, b => b, s => s );
+	<B>end</B> <B>generate</B>;
+	CLA_GEN32 : <B>if</B> ((adder_type = CLA_BASED) <B>and</B> (n = 32)) <B>generate</B>
+		cla_call : <B>entity</B> work.cla_32(struct) <B>port</B> <B>map</B> ( a => a, b => b, s => s );
+	<B>end</B> <B>generate</B>;
+	CLA_GEN16 : <B>if</B> ((adder_type = CLA_BASED) <B>and</B> (n = 16)) <B>generate</B>
+		cla_call : <B>entity</B> work.cla_16(struct) <B>port</B> <B>map</B> ( a => a, b => b, s => s );
+	<B>end</B> <B>generate</B>;
+	FCCA_GEN1 : <B>if</B> (adder_type = FCCA_BASED) <B>generate</B>
+		fcca_call : <B>entity</B> work.fcca(struct) <B>generic</B> <B>map</B> ( n => n )  <B>port</B> <B>map</B> ( a => a, b => b, s => s );
+	<B>end</B> <B>generate</B>;
+	
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

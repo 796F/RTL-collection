@@ -1,0 +1,259 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/groestl_q.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : The Q round of Groestl</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : groestl_q.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-21</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-05</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: 1/8 of the round</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-21  1.0      kgf	Created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-04  1.1      kgf     Major corrections</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-05  1.2      kgf     Moved the register between Addroundcons and</FONT></I>
+<I><FONT COLOR=#808080>--                              SubBytes</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+
+
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> groestl_q <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>       : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>RndxSI</FONT>        : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+    <FONT COLOR=#1E90FF>SubRndxSI</FONT>     : <B>in</B>  integer range 0 <B>to</B> 7;
+    <FONT COLOR=#804040>InxDI</FONT>         : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+    <FONT COLOR=#804040>OutxDO</FONT>        : <B>out</B> std_logic_vector(511 <B>downto</B> 0));
+
+<B>end</B> groestl_q;
+
+<B>architecture</B> rtl <B>of</B> groestl_q <B>is</B>
+
+  <B>component</B> g_mixbytes
+    <B>port</B> (
+      <FONT COLOR=#804040>InxDI</FONT>  : <B>in</B>  std_logic_vector(63 <B>downto</B> 0);
+      <FONT COLOR=#804040>OutxDO</FONT> : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> groestl_subbytes
+    <B>port</B> (
+      <FONT COLOR=#804040>DxDI</FONT> : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+      <FONT COLOR=#804040>DxDO</FONT> : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>type</B> statematrix <B>is</B> <B>array</B> (0 <B>to</B> 7, 0 <B>to</B> 7) <B>of</B> std_logic_vector (7 <B>downto</B> 0);
+  <B>type</B> statearray  <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> std_logic_vector (7 <B>downto</B> 0);
+  <B>type</B> incconsttype <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> integer range 0 <B>to</B> 7;
+  <B>type</B> minputtype <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+
+  
+
+<I><FONT COLOR=#808080>-- KGF states</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>QxDP</FONT>, <FONT COLOR=#804040>QxDN</FONT>, <FONT COLOR=#804040>Q1xD</FONT> : statematrix;
+  <B>signal</B> <FONT COLOR=#804040>RQxD</FONT> : std_logic_vector(63 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- selected column </FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>SQxD</FONT> : std_logic_vector(63 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- after Subbytes</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>MQxD</FONT> : statearray;       <I><FONT COLOR=#808080>-- after MixBytes</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>M1xD</FONT> : minputtype;
+  <B>signal</B> <FONT COLOR=#804040>QStartxD</FONT>, <FONT COLOR=#804040>QFinxD</FONT> : std_logic_vector(511 <B>downto</B> 0);
+  
+  <B>constant</B> INCQ : incconsttype := (1,3,5,7,0,2,4,6);  <I><FONT COLOR=#808080>-- shift amounts for Q</FONT></I>
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- New start either a fresh vector or a state round</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <FONT COLOR=#804040>QStartxD</FONT> <= <FONT COLOR=#804040>InxDI</FONT> <B>when</B> <FONT COLOR=#1E90FF>RndxSI</FONT> = "00000000" <B>else</B> <FONT COLOR=#804040>QFinxD</FONT>;
+  
+  <FONT COLOR=#0000C0>p_new</FONT> : <B>process</B> (<FONT COLOR=#804040>QStartxD</FONT>, <FONT COLOR=#1E90FF>SubRndxSI</FONT>, <FONT COLOR=#1E90FF>RndxSI</FONT>, <FONT COLOR=#804040>Q1xD</FONT>)
+    <B>variable</B> varq : statematrix;
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_new</FONT></I>
+     varq := <FONT COLOR=#804040>Q1xD</FONT>;    
+     <B>if</B> <FONT COLOR=#1E90FF>SubRndxSI</FONT> = 0 <B>then</B>              <I><FONT COLOR=#808080>-- Add round constant</FONT></I>
+       varq(0,7) := <FONT COLOR=#804040>QStartxD</FONT>(455 <B>downto</B> 448)  <B>xor</B> x"ff" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(1,7) := <FONT COLOR=#804040>QStartxD</FONT>(391 <B>downto</B> 384)  <B>xor</B> x"ef" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(2,7) := <FONT COLOR=#804040>QStartxD</FONT>(327 <B>downto</B> 320)  <B>xor</B> x"df" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(3,7) := <FONT COLOR=#804040>QStartxD</FONT>(263 <B>downto</B> 256)  <B>xor</B> x"cf" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(4,7) := <FONT COLOR=#804040>QStartxD</FONT>(199 <B>downto</B> 192)  <B>xor</B> x"bf" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(5,7) := <FONT COLOR=#804040>QStartxD</FONT>(135 <B>downto</B> 128)  <B>xor</B> x"af" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(6,7) := <FONT COLOR=#804040>QStartxD</FONT>( 71 <B>downto</B>  64)  <B>xor</B> x"9f" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       varq(7,7) := <FONT COLOR=#804040>QStartxD</FONT>(  7 <B>downto</B>   0)  <B>xor</B> x"8f" <B>xor</B> <FONT COLOR=#1E90FF>RndxSI</FONT>;
+       <B>for</B> y <B>in</B> 0 <B>to</B> 6 <B>loop</B>
+         <B>for</B> x <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+           varq(x,y) := <FONT COLOR=#804040>QStartxD</FONT>((((7-x) * 64) + ((7-y) *8) + 7) <B>downto</B> ((7-x) * 64) + ((7-y) *8)) <B>xor</B> x"ff";
+         <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- x</FONT></I>
+       <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- y</FONT></I>
+     <B>end</B> <B>if</B>;
+
+     <FONT COLOR=#804040>QxDN</FONT> <= varq;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_new</FONT>;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Register is here now QxDP QxDN</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  
+  
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Select a vector to operate on. The shift is implicit in here</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+ <FONT COLOR=#0000C0>p_selq</FONT>: <B>process</B> (<FONT COLOR=#804040>QxDP</FONT>, <FONT COLOR=#1E90FF>SubRndxSI</FONT>)
+ <B>begin</B>  <I><FONT COLOR=#808080>-- process p_selp</FONT></I>
+   <I><FONT COLOR=#808080>-- we have to change the numbering here, since it is after the register 0</FONT></I>
+   <I><FONT COLOR=#808080>-- became 1 etc.</FONT></I>
+   <B>case</B> <FONT COLOR=#1E90FF>SubRndxSI</FONT> <B>is</B>
+      <B>when</B> 1      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(1,0) & <FONT COLOR=#804040>QxDP</FONT>(3,1) & <FONT COLOR=#804040>QxDP</FONT>(5,2) & <FONT COLOR=#804040>QxDP</FONT>(7,3) & <FONT COLOR=#804040>QxDP</FONT>(0,4) & <FONT COLOR=#804040>QxDP</FONT>(2,5) & <FONT COLOR=#804040>QxDP</FONT>(4,6) & <FONT COLOR=#804040>QxDP</FONT>(6,7);
+      <B>when</B> 2      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(2,0) & <FONT COLOR=#804040>QxDP</FONT>(4,1) & <FONT COLOR=#804040>QxDP</FONT>(6,2) & <FONT COLOR=#804040>QxDP</FONT>(0,3) & <FONT COLOR=#804040>QxDP</FONT>(1,4) & <FONT COLOR=#804040>QxDP</FONT>(3,5) & <FONT COLOR=#804040>QxDP</FONT>(5,6) & <FONT COLOR=#804040>QxDP</FONT>(7,7);
+      <B>when</B> 3      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(3,0) & <FONT COLOR=#804040>QxDP</FONT>(5,1) & <FONT COLOR=#804040>QxDP</FONT>(7,2) & <FONT COLOR=#804040>QxDP</FONT>(1,3) & <FONT COLOR=#804040>QxDP</FONT>(2,4) & <FONT COLOR=#804040>QxDP</FONT>(4,5) & <FONT COLOR=#804040>QxDP</FONT>(6,6) & <FONT COLOR=#804040>QxDP</FONT>(0,7);
+      <B>when</B> 4      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(4,0) & <FONT COLOR=#804040>QxDP</FONT>(6,1) & <FONT COLOR=#804040>QxDP</FONT>(0,2) & <FONT COLOR=#804040>QxDP</FONT>(2,3) & <FONT COLOR=#804040>QxDP</FONT>(3,4) & <FONT COLOR=#804040>QxDP</FONT>(5,5) & <FONT COLOR=#804040>QxDP</FONT>(7,6) & <FONT COLOR=#804040>QxDP</FONT>(1,7);
+      <B>when</B> 5      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(5,0) & <FONT COLOR=#804040>QxDP</FONT>(7,1) & <FONT COLOR=#804040>QxDP</FONT>(1,2) & <FONT COLOR=#804040>QxDP</FONT>(3,3) & <FONT COLOR=#804040>QxDP</FONT>(4,4) & <FONT COLOR=#804040>QxDP</FONT>(6,5) & <FONT COLOR=#804040>QxDP</FONT>(0,6) & <FONT COLOR=#804040>QxDP</FONT>(2,7);
+      <B>when</B> 6      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(6,0) & <FONT COLOR=#804040>QxDP</FONT>(0,1) & <FONT COLOR=#804040>QxDP</FONT>(2,2) & <FONT COLOR=#804040>QxDP</FONT>(4,3) & <FONT COLOR=#804040>QxDP</FONT>(5,4) & <FONT COLOR=#804040>QxDP</FONT>(7,5) & <FONT COLOR=#804040>QxDP</FONT>(1,6) & <FONT COLOR=#804040>QxDP</FONT>(3,7);
+      <B>when</B> 7      => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(7,0) & <FONT COLOR=#804040>QxDP</FONT>(1,1) & <FONT COLOR=#804040>QxDP</FONT>(3,2) & <FONT COLOR=#804040>QxDP</FONT>(5,3) & <FONT COLOR=#804040>QxDP</FONT>(6,4) & <FONT COLOR=#804040>QxDP</FONT>(0,5) & <FONT COLOR=#804040>QxDP</FONT>(2,6) & <FONT COLOR=#804040>QxDP</FONT>(4,7);
+      <B>when</B> <B>others</B> => <FONT COLOR=#804040>RQxD</FONT> <= <FONT COLOR=#804040>QxDP</FONT>(0,0) & <FONT COLOR=#804040>QxDP</FONT>(2,1) & <FONT COLOR=#804040>QxDP</FONT>(4,2) & <FONT COLOR=#804040>QxDP</FONT>(6,3) & <FONT COLOR=#804040>QxDP</FONT>(7,4) & <FONT COLOR=#804040>QxDP</FONT>(1,5) & <FONT COLOR=#804040>QxDP</FONT>(3,6) & <FONT COLOR=#804040>QxDP</FONT>(5,7);
+    <B>end</B> <B>case</B>;
+ <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_selq</FONT>;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- 8 x Sub bytes on this vector</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<FONT COLOR=#0000C0>gen_q_sub</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+    i_subbytes: groestl_subbytes  <B>port</B> <B>map</B> (<FONT COLOR=#804040>DxDI</FONT> => <FONT COLOR=#804040>RQxD</FONT>( (i*8) +7 <B>downto</B> i*8),
+                                            <FONT COLOR=#804040>DxDO</FONT> => <FONT COLOR=#804040>SQxD</FONT>( (i*8) +7 <B>downto</B> i*8));
+<B>end</B> <B>generate</B> <FONT COLOR=#0000C0>gen_q_sub</FONT>;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- We have a fixed MixBytes function. Normally the function is shifted, we will</FONT></I>
+<I><FONT COLOR=#808080>-- shift the input data instead</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(0) SQxD;</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(1) SQxD( 7 downto  0) & SQxD(63 downto  8);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(2) SQxD(15 downto  0) & SQxD(63 downto 16);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(3) SQxD(23 downto  0) & SQxD(63 downto 24);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(4) SQxD(31 downto  0) & SQxD(63 downto 32);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(5) SQxD(39 downto  0) & SQxD(63 downto 40);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(6) SQxD(47 downto  0) & SQxD(63 downto 48);</FONT></I>
+<I><FONT COLOR=#808080>--   M1xD(7) SQxD(55 downto  0) & SQxD(63 downto 56);</FONT></I>
+
+   <FONT COLOR=#804040>M1xD</FONT>(0) <= <FONT COLOR=#804040>SQxD</FONT>;
+   <FONT COLOR=#804040>M1xD</FONT>(1) <= <FONT COLOR=#804040>SQxD</FONT>(55 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 56);
+   <FONT COLOR=#804040>M1xD</FONT>(2) <= <FONT COLOR=#804040>SQxD</FONT>(47 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 48);
+   <FONT COLOR=#804040>M1xD</FONT>(3) <= <FONT COLOR=#804040>SQxD</FONT>(39 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 40);
+   <FONT COLOR=#804040>M1xD</FONT>(4) <= <FONT COLOR=#804040>SQxD</FONT>(31 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 32);
+   <FONT COLOR=#804040>M1xD</FONT>(5) <= <FONT COLOR=#804040>SQxD</FONT>(23 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 24);
+   <FONT COLOR=#804040>M1xD</FONT>(6) <= <FONT COLOR=#804040>SQxD</FONT>(15 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B> 16);
+   <FONT COLOR=#804040>M1xD</FONT>(7) <= <FONT COLOR=#804040>SQxD</FONT>( 7 <B>downto</B>  0) & <FONT COLOR=#804040>SQxD</FONT>(63 <B>downto</B>  8);
+
+
+
+           
+   <FONT COLOR=#0000C0>gen_q_mix</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>generate</B>
+     i_mixbytes: g_mixbytes <B>port</B> <B>map</B> ( <FONT COLOR=#804040>InxDI</FONT>  => <FONT COLOR=#804040>M1xD</FONT>(i),
+                                       <FONT COLOR=#804040>OutxDO</FONT> => <FONT COLOR=#804040>MQxD</FONT>(i));
+   <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>gen_q_mix</FONT>;
+           
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Write back Q</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  
+ <FONT COLOR=#0000C0>p_shiftq</FONT>: <B>process</B> (<FONT COLOR=#804040>QxDP</FONT>, <FONT COLOR=#1E90FF>SubRndxSI</FONT>, <FONT COLOR=#804040>MQxD</FONT>)
+   <B>variable</B> varq : statematrix;
+ <B>begin</B>  <I><FONT COLOR=#808080>-- process p_selp</FONT></I>
+   <I><FONT COLOR=#808080>-- default</FONT></I>
+   varq := <FONT COLOR=#804040>QxDP</FONT>;                        <I><FONT COLOR=#808080>-- do not shift for the first 7 cycles;</FONT></I>
+    <I><FONT COLOR=#808080>-- changed the numbering here. This is after the register, SubRndxSI is 1</FONT></I>
+    <I><FONT COLOR=#808080>-- ahead here</FONT></I>
+    <B>case</B> <FONT COLOR=#1E90FF>SubRndxSI</FONT> <B>is</B>
+      <B>when</B> 1      => varq(1,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(3,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(5,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(7,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(0,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(2,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(4,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(6,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 2      => varq(2,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(4,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(6,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(0,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(1,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(3,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(5,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(7,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 3      => varq(3,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(5,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(7,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(1,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(2,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(4,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(6,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(0,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 4      => varq(4,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(6,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(0,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(2,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(3,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(5,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(7,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(1,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 5      => varq(5,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(7,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(1,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(3,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(4,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(6,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(0,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(2,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 6      => varq(6,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(0,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(2,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(4,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(5,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(7,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(1,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(3,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> 7      => varq(7,0) := <FONT COLOR=#804040>MQxD</FONT>(0); varq(1,1) := <FONT COLOR=#804040>MQxD</FONT>(1); varq(3,2) := <FONT COLOR=#804040>MQxD</FONT>(2); varq(5,3) := <FONT COLOR=#804040>MQxD</FONT>(3);
+                     varq(6,4) := <FONT COLOR=#804040>MQxD</FONT>(4); varq(0,5) := <FONT COLOR=#804040>MQxD</FONT>(5); varq(2,6) := <FONT COLOR=#804040>MQxD</FONT>(6); varq(4,7) := <FONT COLOR=#804040>MQxD</FONT>(7);
+      <B>when</B> <B>others</B> =>                    <I><FONT COLOR=#808080>-- We wait for the shift until the last</FONT></I>
+                                        <I><FONT COLOR=#808080>-- cycle. Now it iis time to shift all</FONT></I>
+                                        <I><FONT COLOR=#808080>-- values</FONT></I>
+                     <B>for</B> y <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+                       <B>for</B> x <B>in</B> 0 <B>to</B> 6 <B>loop</B>
+                         varq(x,y) := <FONT COLOR=#804040>QxDP</FONT>((x+INCQ(y)) mod 8 , y);
+                       <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- x</FONT></I>
+                       varq(7,y) := <FONT COLOR=#804040>MQxD</FONT>(y);
+                     <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- y</FONT></I>
+    <B>end</B> <B>case</B>;
+   <FONT COLOR=#804040>Q1xD</FONT> <= varq;
+ <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_shiftq</FONT>;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Output </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+ <FONT COLOR=#0000C0>p_out</FONT>: <B>process</B> (<FONT COLOR=#804040>Q1xD</FONT>)
+   <B>variable</B> vout : std_logic_vector(511 <B>downto</B> 0);
+ <B>begin</B>  <I><FONT COLOR=#808080>-- process p_out</FONT></I>
+   <B>for</B> y <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+     <B>for</B> x <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+       vout( ((7-x)*64) + ((7-y) * 8) + 7  <B>downto</B> ((7-x)*64) + ((7-y)*8) ) := <FONT COLOR=#804040>Q1xD</FONT>(x,y);
+     <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- x</FONT></I>
+   <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- y</FONT></I>
+
+   <FONT COLOR=#804040>QFinxD</FONT> <= vout;
+ <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_out</FONT>;
+
+ <FONT COLOR=#804040>OutxDO</FONT> <= <FONT COLOR=#804040>QFinxD</FONT>;
+ 
+  <I><FONT COLOR=#808080>-- Memory</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>QxDP</FONT>     <= (<B>others</B> => (<B>others</B> => (<B>others</B> => '0')));
+      
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>QxDP</FONT>     <= <FONT COLOR=#804040>QxDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+
+
+  
+<B>end</B> rtl;
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

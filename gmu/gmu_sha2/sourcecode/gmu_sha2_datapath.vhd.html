@@ -1,0 +1,147 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/gmu_sha2_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-11 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha2_pkg.all;
+
+<B>entity</B> gmu_sha2_datapath <B>is</B>
+<B>generic</B>( 
+	n : integer :=HASH_SIZE_256/SHA2_WORDS_NUM; 
+	a :integer:=LOG_2_64 );
+<B>port</B>(	
+	clk							: <B>in</B> std_logic;
+	rst							: <B>in</B> std_logic;
+	wr_state					: <B>in</B> std_logic;
+	wr_result					: <B>in</B> std_logic;
+	wr_data						: <B>in</B> std_logic;
+	kw_wr						: <B>in</B> std_logic;	
+	sel							: <B>in</B> std_logic;	  
+	sel2						: <B>in</B> std_logic;
+	sel_gh						: <B>in</B> std_logic;		
+	sel_gh2						: <B>in</B> std_logic;	 
+	init_reg					: <B>in</B> std_logic;	  
+	init_block					: <B>in</B> std_logic;
+	rd_num						: <B>in</B> std_logic_vector(a-1 <B>downto</B> 0);
+	data						: <B>in</B> std_logic_vector(511 <B>downto</B> 0);
+	dataout						: <B>out</B> std_logic_vector(255 <B>downto</B> 0)
+	);
+
+<B>end</B> gmu_sha2_datapath;
+
+<B>architecture</B> sha2_datapath_rs <B>of</B> gmu_sha2_datapath <B>is</B>	 
+	<B>type</B> matrix 	<B>is</B> <B>array</B> (0 <B>to</B> STATE_REG_NUM-1) <B>of</B> std_logic_vector(n-1 <B>downto</B> 0);
+	<B>type</B> matrix32 	<B>is</B> <B>array</B> (0 <B>to</B> STATE_REG_NUM-1) <B>of</B> std_logic_vector(31 <B>downto</B> 0);
+	<B>type</B> matrix64 	<B>is</B> <B>array</B> (0 <B>to</B> STATE_REG_NUM-1) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	
+	<B>signal</B> from_round			:matrix;
+	<B>signal</B> to_round				:matrix;
+	<B>signal</B> from_final_add		:matrix;
+	<B>signal</B> from_mux				:matrix;
+	<B>signal</B> result				:matrix;
+	<B>constant</B> iv256				:matrix32 := ( SHA256_AINIT, SHA256_BINIT, SHA256_CINIT, SHA256_DINIT, SHA256_EINIT, SHA256_FINIT, SHA256_GINIT, SHA256_HINIT );  
+	<B>constant</B> iv512				:matrix64 := ( SHA512_AINIT, SHA512_BINIT, SHA512_CINIT, SHA512_DINIT, SHA512_EINIT, SHA512_FINIT, SHA512_GINIT, SHA512_HINIT );  
+	
+	<B>signal</B> wwire				:std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B> kwire				:std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B> h_exception			:std_logic_vector(n-1 <B>downto</B> 0);
+
+	<B>constant</B> zero				:std_logic_vector(n-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>signal</B> kwhwire				:std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B> kwhreg				:std_logic_vector(n-1 <B>downto</B> 0); 
+	<B>signal</B> gh					:std_logic_vector(1 <B>downto</B> 0);
+<B>begin</B>		 	
+
+	stateRegProc: 
+		<B>process</B>( rst, clk )
+		<B>begin</B>	
+			<B>if</B> rst = '0' <B>then</B>
+				to_round <= matrix(iv256);
+			<B>elsif</B> rising_edge( clk ) <B>then</B>	
+				<B>if</B> init_reg = '1' <B>then</B>
+					to_round <= matrix(iv256);
+				<B>elsif</B> wr_state = '1' <B>then</B>	 						
+					to_round <= from_mux;
+				<B>end</B> <B>if</B>;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;
+	
+	
+					
+	kwh_reg		: regna 	<B>generic</B> <B>map</B> (n=>n, init =>zero) 
+		<B>port</B> <B>map</B> (clk=>clk, en=>kw_wr, rst=>rst, input=>kwhwire, output=>kwhreg);
+	
+	gh <= sel_gh & sel_gh2;
+	
+	with gh select
+	h_exception <= 	to_round(6) <B>when</B> "00",
+					to_round(6) <B>when</B> "01",
+					to_round(7) <B>when</B> "10",
+					result(6) <B>when</B> <B>OTHERS</B>;
+			
+	round: 	<B>entity</B> work.sha2_round_rs(basic) 
+			<B>generic</B> <B>map</B> (n=>n)		
+			<B>port</B> <B>map</B> (
+			sel_gh=>sel_gh, kw=>kwhreg, kwire=>kwire, wwire=>wwire,	ain=>to_round(0), bin=>to_round(1), 
+			cin=>to_round(2), din=>to_round(3), ein=>to_round(4), fin=>to_round(5), gin=>to_round(6), 
+			hin=>h_exception, kwhwire=>kwhwire, aout=>from_round(0),bout=>from_round(1), cout=>from_round(2),	
+			dout=>from_round(3), eout=>from_round(4), fout=>from_round(5), gout=>from_round(6), hout=>from_round(7));  	  
+			
+	<FONT COLOR=#0000C0>mux0_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> STATE_REG_NUM-1 <B>generate</B>
+		from_mux(i) <= from_final_add(i) <B>when</B> sel='1' <B>else</B> from_round(i);	
+	<B>end</B> <B>generate</B>; 
+		
+		from_final_add(0) <= to_round(0) +  result(3);
+		from_final_add(1) <= result(0);
+		from_final_add(2) <= result(1);
+		from_final_add(3) <= result(2);
+		from_final_add(4) <= to_round(4) +  result(7);
+		from_final_add(5) <= result(4);
+		from_final_add(6) <= result(5);
+		from_final_add(7) <= result(6);
+	
+	resultRegProc: 
+		<B>process</B>( rst, clk )
+		<B>begin</B>	
+			<B>if</B> rst = '0' <B>then</B>					
+				result <= matrix(iv256);
+			<B>elsif</B> rising_edge( clk ) <B>then</B>	
+				<B>if</B> init_reg = '1' <B>then</B>
+					result <= matrix(iv256);
+				<B>elsif</B> wr_result = '1' <B>then</B>	
+					result <= from_final_add;
+				<B>end</B> <B>if</B>;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;
+		
+	dc	: <B>entity</B> work.sha2_msg_scheduler(mod_mc_evoy) 
+		<B>generic</B> <B>map</B> (n=>n)	
+		<B>port</B> <B>map</B> (clk=>clk, rst=>rst, init=>init_block, sel=>sel2, wr_data=>wr_data, data=>data, w=>wwire);
+							
+	const:<B>entity</B> work.sha2_cons(sha2_cons) <B>generic</B> <B>map</B> (n=>n, a=>a)
+		<B>port</B> <B>map</B> (address=>rd_num, output=>kwire);
+					  
+	<FONT COLOR=#0000C0>dataoutGen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> STATE_REG_NUM-1 <B>generate</B>
+		dataout(n*(STATE_REG_NUM-i)-1 <B>downto</B> n*(STATE_REG_NUM-i-1)) <=result(i);	
+	<B>end</B> <B>generate</B>;
+<B>end</B> sha2_datapath_rs;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

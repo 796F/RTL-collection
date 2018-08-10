@@ -1,0 +1,157 @@
+<HTML>
+<TITLE>
+ ethz_jh/sourcecode/jhfsm_con.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : FSM for jh 256</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : jhfsm_con.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Beat Muheim  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-19</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-03</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: FSM for jh 256 (for jh_con.vhd, jh_comb.vhd) original writen by </FONT></I>
+<I><FONT COLOR=#808080>--              Patrice Guillet, Enrico Pargaetzi and Martin Zollerf</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-19  1.0      bm	created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-02  1.1      bm      change a lot the state machine</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-03  1.2      kgf     hacked the statemachine a little bit</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-10  1.3	bm	make it work output -> round without idle state</FONT></I>
+<I><FONT COLOR=#808080>--                              removed Rlast, add NewBlockSO</FONT></I>
+<I><FONT COLOR=#808080>--				take out "if TENcntxDP < NROUND - 1"</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> JFSM <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#804040>CntxDO</FONT>         : <B>out</B> unsigned(7 <B>downto</B> 0);
+    <FONT COLOR=#1E90FF>SavexSO</FONT>        : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      : <B>out</B> std_logic;
+    NewBlockSO     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic);
+
+<B>end</B> JFSM;
+
+<B>architecture</B> rtl <B>of</B> JFSM <B>is</B>
+
+  <B>type</B>   state <B>is</B> (idle, round, ready, output);
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>StatexDN</FONT>   : state;
+  <B>signal</B> <FONT COLOR=#804040>TENcntxDP</FONT>, <FONT COLOR=#804040>TENcntxDN</FONT> : unsigned(7 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSN</FONT> : std_logic;
+
+  <B>constant</B> NROUND             : integer := 42;      <I><FONT COLOR=#808080>-- ROUND NUMBER</FONT></I>
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  <FONT COLOR=#0000C0>p_fsm</FONT> : <B>process</B> (<FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>TENcntxDP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_fsm</FONT></I>
+
+    <FONT COLOR=#804040>StatexDN</FONT>       <= <FONT COLOR=#804040>StatexDP</FONT>;
+    <FONT COLOR=#1E90FF>FinBlockxSN</FONT>    <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT>;
+    <FONT COLOR=#804040>TENcntxDN</FONT>      <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>CntxDO</FONT>         <= <FONT COLOR=#804040>TENcntxDP</FONT>;
+    <FONT COLOR=#1E90FF>SavexSO</FONT>        <= '0';
+    <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      <= '0';
+    NewBlockSO     <= '0';
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     <= '0';
+
+    <B>case</B> <FONT COLOR=#804040>StatexDP</FONT> <B>is</B>
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> idle =>
+
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+	  <FONT COLOR=#1E90FF>NewMsgxSO</FONT>   <= '1';
+          NewBlockSO  <= '1';
+          <FONT COLOR=#804040>TENcntxDN</FONT>   <= <B>to_unsigned</B>(1, 8);
+          <FONT COLOR=#804040>StatexDN</FONT>    <= round;
+        <B>end</B> <B>if</B>;
+
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> round =>
+        
+        <B>if</B> <FONT COLOR=#804040>TENcntxDP</FONT> = NROUND - 1 <B>then</B>
+	  <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+	    <FONT COLOR=#804040>StatexDN</FONT>       <= output;
+          <B>else</B>
+            <FONT COLOR=#804040>StatexDN</FONT>       <= ready;
+          <B>end</B> <B>if</B>;
+        <B>else</B>
+          <FONT COLOR=#804040>TENcntxDN</FONT> <= <FONT COLOR=#804040>TENcntxDP</FONT>+1;
+          <FONT COLOR=#804040>StatexDN</FONT>  <= round;
+        <B>end</B> <B>if</B>;
+
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> ready =>
+        
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>TENcntxDN</FONT>   <= <B>to_unsigned</B>(1, 8);
+          <FONT COLOR=#804040>StatexDN</FONT>    <= round;
+          NewBlockSO  <= '1';
+          <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+        <B>else</B>
+          <FONT COLOR=#1E90FF>SavexSO</FONT>  <= '1';
+          <FONT COLOR=#804040>StatexDN</FONT> <= ready;
+        <B>end</B> <B>if</B>;
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> output =>
+        <FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= '1';
+        <FONT COLOR=#804040>StatexDN</FONT>    <= idle;
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+	  <FONT COLOR=#1E90FF>NewMsgxSO</FONT>  <= '1';
+          NewBlockSO <= '1';
+          <FONT COLOR=#804040>TENcntxDN</FONT>  <= <B>to_unsigned</B>(1, 8);
+          <FONT COLOR=#804040>StatexDN</FONT>   <= round;
+        <B>end</B> <B>if</B>;
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> <B>others</B> => <FONT COLOR=#804040>StatexDN</FONT> <= idle;
+                     
+    <B>end</B> <B>case</B>;
+    
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_fsm</FONT>;
+
+  <FONT COLOR=#0000C0>p_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT>    <= idle;
+      <FONT COLOR=#804040>TENcntxDP</FONT>   <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= '0';
+   
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT>    <= <FONT COLOR=#804040>StatexDN</FONT>;
+      <FONT COLOR=#804040>TENcntxDP</FONT>   <= <FONT COLOR=#804040>TENcntxDN</FONT>;
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSN</FONT>;
+
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

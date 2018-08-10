@@ -1,0 +1,160 @@
+<HTML>
+<TITLE>
+ gmu_groestl/simvectors/gen_sha3_stimuli.pl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /usr/bin/perl -w</FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<B>use</B> <B>strict</B>;
+
+<I><FONT COLOR=#808080># v0.2 - kgf@ee.ethz.ch - Fri Aug 12 14:10:07 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - added the modulo for blake and sha2</FONT></I>
+<I><FONT COLOR=#808080># v0.2 - kgf@ee.ethz.ch - Thu Aug 11 08:38:45 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - Length parameter changed to bits</FONT></I>
+<I><FONT COLOR=#808080># - Introduced the algorithm specific modulo to determine </FONT></I>
+<I><FONT COLOR=#808080>#   the bit size</FONT></I>
+<I><FONT COLOR=#808080># - Starts a localized script to generate the stimuli files</FONT></I>
+
+<I><FONT COLOR=#808080># v0.1 - kgf@ee.ethz.ch - Tue Jul 26 10:10:49 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - This should generate the stimuli files for the SHA3 algorithms</FONT></I>
+
+<I><FONT COLOR=#808080># ToDo:</FONT></I>
+<I><FONT COLOR=#808080># - Have a database of reference values (KAT)</FONT></I>
+<I><FONT COLOR=#808080># - The length is limited to the (algorithm specific) modulo values</FONT></I>
+<I><FONT COLOR=#808080>#   as determined by the $modulo{$alg}. This limits the possinble </FONT></I>
+<I><FONT COLOR=#808080>#   input values, and is there purely for convenience reasons.</FONT></I>
+
+
+<I><FONT COLOR=#808080>## CONSTANTS</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$MAX_RANDOM_NUMBITS</FONT></I>  = 16384;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$MAX_RANDOM_VECTORS</FONT></I>  = 1000;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$STIMULI_FILE</FONT></I>        = "testvectors.txt";
+
+
+<I><FONT COLOR=#808080>## get the number of vectors to be generated</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$num_vectors</FONT></I>  = ($<I><FONT COLOR=#808080>#ARGV>-1)? shift: 10;</FONT></I>
+<I><FONT COLOR=#808080>## perhaps we want it randomized ?? </FONT></I>
+<I><FONT COLOR=0000FF>$num_vectors</FONT></I> = (<I><FONT COLOR=0000FF>$num_vectors</FONT></I>=~/ra?ndo?m?/i)? <B><FONT COLOR=AA0000>int</FONT></B>(<B><FONT COLOR=AA0000>rand</FONT></B>(<I><FONT COLOR=0000FF>$MAX_RANDOM_VECTORS</FONT></I>)) : <I><FONT COLOR=0000FF>$num_vectors</FONT></I>;
+
+<I><FONT COLOR=#808080>## second argument is how many bits we want</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$num_bits</FONT></I>= ($<I><FONT COLOR=#808080>#ARGV>-1)? shift: 512;</FONT></I>
+
+<I><FONT COLOR=#808080>## get the name of the algorithm from the pwd</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$pwd</FONT></I> =`pwd`;
+<B>unless</B> (<I><FONT COLOR=0000FF>$pwd</FONT></I>=~/\/(ethz|gmu)_(blake|groestl|jh|keccak|skein|sha2)\/simvectors/){
+  <B><FONT COLOR=AA0000>die</FONT></B> "\nI am not sure the path is correct:\n\t${pwd}exiting\n";
+}
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$alg</FONT></I>=<I><FONT COLOR=0000FF>$2</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$flavor</FONT></I>=<I><FONT COLOR=0000FF>$1</FONT></I>;
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%names</FONT></I>= ( "blake"   => "Jean-Philippe Aumasson",
+             "groestl" => "Groestl Team",
+             "jh"      => "Hongjun Wu",
+             "keccak"  => "Keccak Team",
+             "sha2"    => "NIST",
+             "skein"   => "Bruce Schneier");
+
+<I><FONT COLOR=#808080>## tells what is the modulo in which the vectors have to be generated</FONT></I>
+<I><FONT COLOR=#808080>## make sure this is at least 8 for the moment (random number generating </FONT></I>
+<I><FONT COLOR=#808080>## part accepts number of bytes. Should not be a major problem</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%modulo</FONT></I>= ( "blake"   => 16,
+              "groestl" => 16,
+              "jh"      => 16,
+              "keccak"  => 16,
+              "sha2"    => 8,
+              "skein"   => 16);
+
+
+
+<B><FONT COLOR=AA0000>print</FONT></B> "Generating <I><FONT COLOR=0000FF>$num_vectors</FONT></I> vectors of length ${num_bits} bits <B>for</B>\n";
+<B><FONT COLOR=AA0000>print</FONT></B> "Algorithm <I><FONT COLOR=0000FF>$alg</FONT></I> (by <I><FONT COLOR=0000FF>$names</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>}) - <I><FONT COLOR=0000FF>$flavor</FONT></I> flavor\n";
+
+
+
+<B><FONT COLOR=AA0000>open</FONT></B> (S, "> stimuli.txt") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not create stimuli.txt, exiting\n";
+
+
+<B><FONT COLOR=AA0000>print</FONT></B> S <<"BUGU";
+<I><FONT COLOR=#808080># stimuli.txt </FONT></I>
+<I><FONT COLOR=#808080># Algorithm Name: $alg</FONT></I>
+<I><FONT COLOR=#808080># Principal Submitter: $names{$alg}</FONT></I>
+
+BUGU
+
+<B>for</B> <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$i</FONT></I> (1..<I><FONT COLOR=0000FF>$num_vectors</FONT></I>){
+
+  <I><FONT COLOR=#808080>## perhaps we want it randomized ?? </FONT></I>
+  <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$num_act_bits</FONT></I>= (<I><FONT COLOR=0000FF>$num_bits</FONT></I>=~/ra?ndo?m?/i)? <B><FONT COLOR=AA0000>int</FONT></B>(<B><FONT COLOR=AA0000>rand</FONT></B>(<I><FONT COLOR=0000FF>$MAX_RANDOM_NUMBITS</FONT></I>)/<I><FONT COLOR=0000FF>$modulo</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>})*<I><FONT COLOR=0000FF>$modulo</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>}+<I><FONT COLOR=0000FF>$modulo</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>} 
+                                             : <B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$num_bits</FONT></I>/<I><FONT COLOR=0000FF>$modulo</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>})*<I><FONT COLOR=0000FF>$modulo</FONT></I>{<I><FONT COLOR=0000FF>$alg</FONT></I>};
+
+  <I><FONT COLOR=#808080>## this case is not handled correctly.. ethz blake makes mistakes for block lengths between </FONT></I>
+  <I><FONT COLOR=#808080>## 448 - 512  (modulo 512) inclusive</FONT></I>
+  <B>if</B> ( (<I><FONT COLOR=0000FF>$flavor</FONT></I> eq "ethz") <B>and</B> (<I><FONT COLOR=0000FF>$alg</FONT></I> eq "blake") <B>and</B> 
+       ( (<I><FONT COLOR=0000FF>$num_act_bits</FONT></I> % 512 == 0) <B>or</B> ((<I><FONT COLOR=0000FF>$num_act_bits</FONT></I> % 512) ge 448) <B>and</B> ((<I><FONT COLOR=0000FF>$num_act_bits</FONT></I> % 512) le 511)) 
+     ) { <I><FONT COLOR=0000FF>$num_act_bits</FONT></I> = 128 }
+
+  <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$num_bytes</FONT></I>= <B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$num_act_bits</FONT></I> / 8) ; <I><FONT COLOR=#808080>## make sure the modulo is at least 8 </FONT></I>
+  <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$data</FONT></I>=<B><FONT COLOR=AA0000>uc</FONT></B>(random_data(<I><FONT COLOR=0000FF>$num_bytes</FONT></I>));
+  <B><FONT COLOR=AA0000>print</FONT></B> S <<"BUGU";
+Len = <I><FONT COLOR=0000FF>$num_act_bits</FONT></I>
+Msg = <I><FONT COLOR=0000FF>$data</FONT></I>
+MD = ??
+  
+BUGU
+}
+<B><FONT COLOR=AA0000>close</FONT></B>(S);
+
+<I><FONT COLOR=#808080># now we are finished</FONT></I>
+<I><FONT COLOR=#808080># run ETHZ_KAT so that the expected responses are there</FONT></I>
+<B>if</B> (-e "ETHZ_KAT"){ 
+  <B><FONT COLOR=AA0000>print</FONT></B> '-' x 60 ."\n";
+  <B><FONT COLOR=AA0000>print</FONT></B> "running ETHZ_KAT to generate expresp.txt\n";
+  <B><FONT COLOR=AA0000>system</FONT></B> ("./ETHZ_KAT");
+  <B><FONT COLOR=AA0000>print</FONT></B> "done..\n";
+  <B><FONT COLOR=AA0000>print</FONT></B> '-' x 60 ."\n";
+}
+<B>else</B>{
+  <B><FONT COLOR=AA0000>die</FONT></B> "We need ETHZ_KAT executable <B>for</B> <I><FONT COLOR=0000FF>$alg</FONT></I> compiled first\n";
+}
+
+<I><FONT COLOR=#808080>## if one exists, start the post-processing step</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$script</FONT></I> = "${flavor}_${alg}_stimuli.pl";
+<B>if</B> (-e <I><FONT COLOR=0000FF>$script</FONT></I>){
+  <B><FONT COLOR=AA0000>print</FONT></B> "running <I><FONT COLOR=0000FF>$script</FONT></I> to generate the <I><FONT COLOR=0000FF>$STIMULI_FILE</FONT></I>\n";
+  <B><FONT COLOR=AA0000>system</FONT></B> ("./<I><FONT COLOR=0000FF>$script</FONT></I> > <I><FONT COLOR=0000FF>$STIMULI_FILE</FONT></I>");
+  <B><FONT COLOR=AA0000>print</FONT></B> "done..\n";
+  <B><FONT COLOR=AA0000>print</FONT></B> '-' x 60 ."\n";
+}
+<B>else</B>{
+  <B><FONT COLOR=AA0000>die</FONT></B> "Can not find algorithm specific post processing script [<I><FONT COLOR=0000FF>$script</FONT></I>]\n";
+}
+
+
+<B>sub</B> random_data {
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$num_bits</FONT></I> = ($<I><FONT COLOR=#808080>#_ > -1) ? $_[0] : 16;</FONT></I>
+
+<I><FONT COLOR=#808080># will generate a 128 bit data, can be used as input vector or key </FONT></I>
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$retval</FONT></I> ="";
+  <B>for</B> (1..<I><FONT COLOR=0000FF>$num_bits</FONT></I>) {
+     <I><FONT COLOR=0000FF>$retval</FONT></I> = <I><FONT COLOR=0000FF>$retval</FONT></I> . <B><FONT COLOR=AA0000>unpack</FONT></B> ('H*', <B><FONT COLOR=AA0000>pack</FONT></B> ('C1',<B><FONT COLOR=AA0000>int</FONT></B>(<B><FONT COLOR=AA0000>rand</FONT></B>(256))));
+  }
+
+<B>return</B> <I><FONT COLOR=0000FF>$retval</FONT></I>;
+
+}
+
+
+
+
+             
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,4 @@
+fifo_interface_din.vhd
+fifo_interface_dout.vhd
+BLAKE32.vhd
+hls_blake.vhd

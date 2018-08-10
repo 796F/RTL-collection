@@ -1,0 +1,115 @@
+<HTML>
+<TITLE>
+ gmu_keccak/encounter/eval_enc_results.pl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /usr/bin/perl -w </FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<B>use</B> <B>strict</B>; 
+
+<I><FONT COLOR=#808080># v0.2 - kgf@ee.ethz.ch - Wed Oct  5 10:32:24 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - write the results to a common data file</FONT></I>
+<I><FONT COLOR=#808080># v0.1 - kgf@ee.ethz.ch - Tue Oct  4 17:02:05 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - this will extract the information from the multiple encounter rusn</FONT></I>
+
+<B>unless</B> (<I><FONT COLOR=0000FF>$ENV</FONT></I>{PWD}=~/(ethz|gmu)_(blake|skein|sha2|jh|keccak|groestl)\/encounter$/){
+   <B><FONT COLOR=AA0000>die</FONT></B> "Current directory is [<I><FONT COLOR=0000FF>$ENV</FONT></I>{PWD}] not in encounter\n";
+}
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$flavor</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B>  <I><FONT COLOR=0000FF>$alg</FONT></I> = <I><FONT COLOR=0000FF>$2</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$GATE</FONT></I>=1.44; <I><FONT COLOR=#808080># constant </FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$FILE</FONT></I>="gnuplot_enc_result.dat";
+
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$date</FONT></I>=`date`;
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$date</FONT></I>);
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%LATENCY</FONT></I> = (
+                  "ethz_sha2"    =>  67, 
+                  "ethz_blake"   =>  57,
+                  "ethz_groestl" =>  81, 
+                  "ethz_jh"      =>  42, 
+                  "ethz_keccak"  =>  24, 
+                  "ethz_skein"   =>  92, 
+                  "gmu_sha2"     =>  65, 
+                  "gmu_blake"    =>  29, 
+                  "gmu_groestl"  =>  21,
+                  "gmu_jh"       =>  43,
+                  "gmu_keccak"   =>  24,
+                  "gmu_skein"    =>  19
+              );
+
+
+<I><FONT COLOR=#808080>## determine the actual runs:</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>@RUNS</FONT></I>=`ls encounter_*.cmd`;
+
+
+<B><FONT COLOR=AA0000>print</FONT></B><<"BUGU";
+
++--------------------------------------------------------------------------------------------+
+| <I><FONT COLOR=0000FF>$flavor</FONT></I> <I><FONT COLOR=0000FF>$alg</FONT></I>     
+|
+| Constraints       | Achieved Results                                                       |
++---------+---------+----------+----------+-------------+-------------+----------------------+
+|Clock    |Util.    | Timing   | Util     | Gate Equiv  | Throughput  | Throughput per Area  |
++---------+---------+----------+----------+-------------+-------------+----------------------+
+BUGU
+
+<B><FONT COLOR=AA0000>open</FONT></B> (R, "> <I><FONT COLOR=0000FF>$FILE</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "can not <B><FONT COLOR=AA0000>open</FONT></B> <I><FONT COLOR=0000FF>$FILE</FONT></I> <B>for</B> writing\n";
+
+<B>foreach</B> <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$r</FONT></I> (<I><FONT COLOR=0000FF>@RUNS</FONT></I>){
+ <B><FONT COLOR=AA0000>chomp</FONT></B> (<I><FONT COLOR=0000FF>$r</FONT></I>);
+ <I><FONT COLOR=0000FF>$r</FONT></I>=~/encounter_(\d+\.\d+)_(\d+\.\d+)\.cmd/;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$clk</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$util</FONT></I>=<I><FONT COLOR=0000FF>$2</FONT></I>;
+ 
+<I><FONT COLOR=#808080># print "$alg $flavor $clk - $util \n";</FONT></I>
+
+<I><FONT COLOR=#808080>#### Read area information </FONT></I>
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$fp_file</FONT></I>="timingReports_${clk}_${util}/${flavor}_${alg}_analyzeFP.rpt";
+ <B><FONT COLOR=AA0000>open</FONT></B>(F, "< <I><FONT COLOR=0000FF>$fp_file</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> Floorplan file [${fp_file}]\n";
+
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$area</FONT></I>=0;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$density</FONT></I>=0;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$instances</FONT></I>=0;
+
+ <B>while</B> (F){
+   <B>if</B>    (/Core Area.*:\s*(\d+\.\d+)/){ <I><FONT COLOR=0000FF>$area</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>} 
+   <B>elsif</B> (/Core Density.*:\s*(\d+\.\d+)/){ <I><FONT COLOR=0000FF>$density</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>}
+   <B>elsif</B> (/Number of instance.*:\s*(\d+)/){ <I><FONT COLOR=0000FF>$instances</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>}
+ }
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$gates</FONT></I>=<B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$area</FONT></I>/<I><FONT COLOR=0000FF>$GATE</FONT></I>) / 1000 ;
+ <B><FONT COLOR=AA0000>close</FONT></B>(F);
+
+<I><FONT COLOR=#808080>#### Read timing information </FONT></I>
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$tim_file</FONT></I>="timingReports_${clk}_${util}/${flavor}_${alg}.postroute-opt.summary";
+ <B><FONT COLOR=AA0000>open</FONT></B>(T, "< <I><FONT COLOR=0000FF>$tim_file</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> timing report [${tim_file}]\n";
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$slack</FONT></I> = 0;
+ <B>while</B> (T){
+   <B>if</B>    (/WNS .ns.:.\s*(-?\d+\.\d+)/){ <I><FONT COLOR=0000FF>$slack</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>} 
+ }
+ <B><FONT COLOR=AA0000>close</FONT></B>(T);
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$timing</FONT></I> = <I><FONT COLOR=0000FF>$clk</FONT></I> - <I><FONT COLOR=0000FF>$slack</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$bpc</FONT></I> = (<I><FONT COLOR=0000FF>$alg</FONT></I> eq "keccak") ? 1088 : 512 ; <I><FONT COLOR=#808080># bits per block</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$tput</FONT></I> = <I><FONT COLOR=0000FF>$bpc</FONT></I> / (<I><FONT COLOR=0000FF>$timing</FONT></I> * <I><FONT COLOR=0000FF>$LATENCY</FONT></I>{"${flavor}_${alg}"});
+
+<B><FONT COLOR=AA0000>printf</FONT></B>("| <I><FONT COLOR=0000FF>%3</FONT></I>.2f ns | <I><FONT COLOR=0000FF>%5</FONT></I>.1f %% | <I><FONT COLOR=0000FF>%5</FONT></I>.3f ns |  <I><FONT COLOR=0000FF>%5</FONT></I>.2f %% | <I><FONT COLOR=0000FF>%7</FONT></I>.3f kGE | <I><FONT COLOR=0000FF>%6</FONT></I>.3f Gb/s | <I><FONT COLOR=0000FF>%7</FONT></I>.3f kbits/s/gate |\n", 
+       <I><FONT COLOR=0000FF>$clk</FONT></I>, <I><FONT COLOR=0000FF>$util</FONT></I> *100, <I><FONT COLOR=0000FF>$timing</FONT></I>, <I><FONT COLOR=0000FF>$density</FONT></I>, <I><FONT COLOR=0000FF>$gates</FONT></I>, <I><FONT COLOR=0000FF>$tput</FONT></I>, (1000*<I><FONT COLOR=0000FF>$tput</FONT></I>)/ (<I><FONT COLOR=0000FF>$area</FONT></I>/(1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>)));
+
+<I><FONT COLOR=#808080># print to file</FONT></I>
+<B><FONT COLOR=AA0000>printf</FONT></B> R ("<I><FONT COLOR=0000FF>%7</FONT></I>.3f <I><FONT COLOR=0000FF>%5</FONT></I>.3f <I><FONT COLOR=0000FF>%6</FONT></I>.3f\n",<I><FONT COLOR=0000FF>$gates</FONT></I>, <I><FONT COLOR=0000FF>$timing</FONT></I>,<I><FONT COLOR=0000FF>$tput</FONT></I>);
+ 
+}
+<B><FONT COLOR=AA0000>print</FONT></B> "+---------+---------+----------+----------+-------------+-------------+----------------------+\n";
+<I><FONT COLOR=#808080># done with the file</FONT></I>
+<B><FONT COLOR=AA0000>close</FONT></B>(R);
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

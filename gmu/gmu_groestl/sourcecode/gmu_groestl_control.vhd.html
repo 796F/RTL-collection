@@ -1,0 +1,170 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/gmu_groestl_control.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.groestl_pkg.all;
+
+<I><FONT COLOR=#808080>-- Possible generics values: </FONT></I>
+<I><FONT COLOR=#808080>-- hs = {HASH_SIZE_256, HASH_SIZE_512} </FONT></I>
+
+<B>entity</B> gmu_groestl_control <B>is</B>		
+	<B>generic</B> (
+		RST_ACTIVE_VALUE : std_logic := '0' );
+	<B>port</B> (					
+		rst			: <B>in</B> std_logic;
+		clk			: <B>in</B> std_logic;
+		
+		<I><FONT COLOR=#808080>-- processing</FONT></I>
+		init1				: <B>out</B> std_logic;	
+		init2				: <B>out</B> std_logic;	
+		init3				: <B>out</B> std_logic;	
+		last_cycle			: <B>out</B> std_logic;					
+		finalization		: <B>out</B> std_logic;	
+		wr_state			: <B>out</B> std_logic;
+		wr_result			: <B>out</B> std_logic;
+		load_ctr			: <B>out</B> std_logic;										   
+		wr_ctr				: <B>out</B> std_logic;
+		p_mode				: <B>out</B> std_logic;
+		
+		<FONT COLOR=#1E90FF>InWrEnxSI</FONT>			: <B>in</B> std_logic;
+		<FONT COLOR=#1E90FF>FinBlockxSI</FONT>			: <B>in</B> std_logic;
+		
+		<FONT COLOR=#1E90FF>OutWrEnxSO</FONT>			: <B>out</B> std_logic;
+		<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> 		: <B>out</B> std_logic		
+	);					 
+<B>end</B> gmu_groestl_control;
+
+<B>architecture</B> beh <B>of</B> gmu_groestl_control <B>is</B>	
+	<B>type</B> stateType <B>is</B> ( initState, idleState, hashBlockState, finBlockState, hashLastBlockState, finLastBlockState );
+	<B>signal</B> cstate, nstate : stateType;
+	
+	<B>signal</B> lastBlockFlag, lastBlockSet, lastBlockClr : std_logic;	
+	<B>signal</B> roundCtr : std_logic_vector(4 <B>downto</B> 0);
+	<B>signal</B> loadRoundCtr, incRoundCtr : std_logic;
+	
+	<B>signal</B> roundDoneComp : std_logic;	 
+	<B>signal</B> firstRoundComp : std_logic;
+	<B>signal</B> secondRoundComp : std_logic;
+	
+	<B>signal</B> sfSet, sfClr, sfFlag : std_logic;
+	<B>constant</B> roundNumber : integer := 20;
+<B>begin</B>											   
+	roundCtrGen:
+		<B>process</B>( rst, clk )
+		<B>begin</B>
+			<B>if</B> (rst = RST_ACTIVE_VALUE) <B>then</B>
+				roundCtr <= (<B>others</B> => '0');
+			<B>elsif</B> rising_edge( clk ) <B>then</B>
+				<B>if</B> loadRoundCtr = '1' <B>then</B>
+					roundCtr <= (<B>others</B> => '0');					
+				<B>elsif</B> incRoundCtr = '1' <B>then</B>
+					roundCtr <= roundCtr + 1;
+				<B>end</B> <B>if</B>;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;
+	incRoundCtr <= '1' <B>when</B> (cstate = hashBlockState <B>or</B> cstate = hashLastBlockState) <B>else</B> '0';
+	loadRoundCtr <= '1' <B>when</B> (cstate = idleState <B>or</B> cstate = finBlockState <B>or</B> cstate = finLastBlockState) <B>else</B> '0';	
+	roundDoneComp <= '1' <B>when</B> roundCtr = roundNumber-1 <B>else</B> '0';	  
+	firstRoundComp <= '1' <B>when</B> roundCtr = 0 <B>else</B> '0';
+	secondRoundComp <= '1' <B>when</B> roundCtr = 1 <B>else</B> '0';	  
+	
+	stateReg:
+		<B>process</B>( rst, clk )
+		<B>begin</B>
+			<B>if</B> (rst = RST_ACTIVE_VALUE) <B>then</B>
+				cstate <= initState;
+			<B>elsif</B> rising_edge( clk ) <B>then</B>
+				cstate <= nstate;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;
+	
+	nextStateComb:
+		<B>process</B>( cstate, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, roundDoneComp, lastBlockFlag )
+		<B>begin</B>																				
+			<B>case</B> cstate <B>is</B>
+				<B>when</B> initState =>
+					nstate <= idleState;
+				<B>when</B> idleState =>
+					<B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+						nstate <= hashBlockState;
+					<B>else</B>
+						nstate <= idleState;
+					<B>end</B> <B>if</B>;			
+				<B>when</B> hashBlockState =>
+					<B>if</B> roundDoneComp = '1' <B>then</B>	
+						nstate <= finBlockState;
+					<B>else</B>
+						nstate <= hashBlockState;
+					<B>end</B> <B>if</B>;				
+				<B>when</B> finBlockState =>
+					<B>if</B> lastBlockFlag = '1' <B>then</B> 
+						nstate <= hashLastBlockState;
+					<B>elsif</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+						nstate <= hashBlockState;
+					<B>else</B>
+						nstate <= finBlockState;
+					<B>end</B> <B>if</B>;
+				<B>when</B> hashLastBlockState =>
+				   	<B>if</B> roundDoneComp = '1' <B>then</B>	
+						nstate <= finLastBlockState;
+					<B>else</B>
+						nstate <= hashLastBlockState;
+					<B>end</B> <B>if</B>;
+				<B>when</B> finLastBlockState =>
+					nstate <= idleState;
+			<B>end</B> <B>case</B>;
+		<B>end</B> <B>process</B>;
+	
+	<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1' <B>when</B> (cstate = hashBlockState <B>and</B> roundDoneComp = '1' <B>and</B> lastBlockFlag = '0') <B>or</B> (cstate = finLastBlockState) <B>else</B> '0';		
+	
+	lastBlockInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => lastBlockSet, clr => lastBlockClr, output => lastBlockFlag );
+	lastBlockSet <= '1' <B>when</B> (cstate = idleState <B>or</B> cstate = finBlockState) <B>and</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT> = '1' <B>and</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1') <B>else</B> '0';
+	lastBlockClr <= '1' <B>when</B> (cstate = idleState) <B>else</B> '0';
+	<FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= '1' <B>when</B> (cstate = finLastBlockState) <B>else</B> '0';
+	
+	sfInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => sfSet, clr => sfClr, output => sfFlag );
+	sfSet <= '1' <B>when</B> (cstate = idleState) <B>else</B> '0';
+	sfClr <= '1' <B>when</B> (cstate = hashBlockState <B>or</B> cstate = hashLastBlockState) <B>else</B> '0';
+	
+	<I><FONT COLOR=#808080>-- Output</FONT></I>
+	last_cycle <= '1' <B>when</B> (cstate = finBlockState) <B>else</B> '0';
+	finalization <= '1' <B>when</B> (cstate = finBlockState <B>or</B> cstate = finLastBlockState) <B>else</B> '0';
+	wr_ctr <= roundCtr(0);
+	p_mode <= '1' <B>when</B> (cstate = hashBlockState <B>and</B> roundCtr(0) = '1') <B>or</B>
+						(cstate = hashLastBlockState <B>and</B> roundCtr(0) = '0') <B>else</B> '0';
+	load_ctr <= '1' <B>when</B> (cstate = idleState) <B>or</B> ((cstate = hashBlockState <B>or</B> cstate = hashLastBlockState) <B>and</B> roundDoneComp = '1') <B>else</B> '0';
+	wr_state <= '1' <B>when</B> (cstate = hashBlockState <B>or</B> cstate = hashLastBlockState) <B>or</B>
+							(cstate = finBlockState <B>and</B> (lastBlockFlag = '1' <B>or</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1')) <B>or</B>
+							(cstate = finLastBlockState) <B>else</B> '0';
+	wr_result <= '1' <B>when</B> (cstate = finBlockState <B>and</B> (lastBlockFlag = '1' <B>or</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1')) <B>or</B>
+							((cstate = hashBlockState <B>or</B> cstate = hashLastBlockState) <B>and</B> roundDoneComp = '1') <B>or</B>
+							(sfFlag = '1') <B>else</B> '0';
+	init1 <= '1' <B>when</B> (cstate = hashBlockState <B>and</B> firstRoundComp = '1') <B>else</B> '0';
+	init2 <= '1' <B>when</B> (cstate = hashBlockState <B>and</B> (firstRoundComp = '1' <B>or</B> secondRoundComp = '1')) <B>else</B> '0';	
+	init3 <= sfFlag;
+	
+<B>end</B> beh;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

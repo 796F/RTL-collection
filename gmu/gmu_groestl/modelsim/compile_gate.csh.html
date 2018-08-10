@@ -1,0 +1,79 @@
+<HTML>
+<TITLE>
+ gmu_groestl/modelsim/compile_gate.csh
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /bin/tcsh -f</FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># v0.2 -  - Wed Oct  5 10:26:26 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - added a commandline argument to set the out directory</FONT></I>
+<I><FONT COLOR=#808080># v0.1 -  - Tue Sep 27 12:55:33 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - Copy from shabziger/modelsim/compile_gate.csh</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>VER</FONT></I>=<I><FONT COLOR=800000>10.0b</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LIB</FONT></I>=<I><FONT COLOR=800000>gate</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>ALG</FONT></I>=<I><FONT COLOR=800000>shabziger_chip</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF><B>PWD</B></FONT></I>=<I><FONT COLOR=800000>`<B>pwd</B>`</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DIR</FONT></I>=<I><FONT COLOR=800000>`dirname <I><FONT COLOR=0000FF>$<B>PWD</B></FONT></I>`</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>ALG</FONT></I>=<I><FONT COLOR=800000>`basename <I><FONT COLOR=0000FF>$DIR</FONT></I>`</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOG</FONT></I>=<I><FONT COLOR=800000><I><FONT COLOR=0000FF>${ALG}</FONT></I>_tb_compile.log</FONT></I>
+
+<B>if</B> (<I><FONT COLOR=0000FF>$1</FONT></I> != "") <B>then</B>
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>DIR</FONT></I>=<I><FONT COLOR=800000>"<I><FONT COLOR=0000FF>$1</FONT></I>"</FONT></I>
+  <B>if</B> (! -e <I><FONT COLOR=0000FF>$DIR</FONT></I>) <B>then</B>
+    <B>echo</B> "ERROR: can not access [<I><FONT COLOR=0000FF>$1</FONT></I>], exiting"
+    exit
+  <B>endif</B>
+<B>else</B>
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>DIR</FONT></I>=<I><FONT COLOR=800000>"../encounter/out"</FONT></I>
+<B>endif</B>  
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>NETLIST</FONT></I>=<I><FONT COLOR=800000>"<I><FONT COLOR=0000FF>$DIR</FONT></I>/<I><FONT COLOR=0000FF>${ALG}</FONT></I>.v"</FONT></I>
+<B>echo</B> "Compiling <I><FONT COLOR=0000FF>$NETLIST</FONT></I> "
+
+
+<B>if</B> (-e <I><FONT COLOR=0000FF>$LIB</FONT></I>) <B>then</B>
+  <B>echo</B> "Deleting old library [<I><FONT COLOR=0000FF>$LIB</FONT></I>]"
+  rm -rf <I><FONT COLOR=0000FF>$LIB</FONT></I> 
+<B>endif</B>
+
+vlib-<I><FONT COLOR=0000FF>${VER}</FONT></I> <I><FONT COLOR=0000FF>$LIB</FONT></I>
+
+<B>echo</B> -n "** Compilation of <I><FONT COLOR=0000FF>${ALG}</FONT></I> from: "                     >  <I><FONT COLOR=0000FF>${LOG}</FONT></I>
+date >> <I><FONT COLOR=0000FF>${LOG}</FONT></I>
+
+vlog-<I><FONT COLOR=0000FF>${VER}</FONT></I> -work <I><FONT COLOR=0000FF>${LIB}</FONT></I> <I><FONT COLOR=0000FF>${NETLIST}</FONT></I>                           >> <I><FONT COLOR=0000FF>${LOG}</FONT></I>
+
+vcom-<I><FONT COLOR=0000FF>${VER}</FONT></I> -work <I><FONT COLOR=0000FF>${LIB}</FONT></I> ../sourcecode/simulstuff.vhd         >> <I><FONT COLOR=0000FF>${LOG}</FONT></I>
+vcom-<I><FONT COLOR=0000FF>${VER}</FONT></I> -work <I><FONT COLOR=0000FF>${LIB}</FONT></I> ../sourcecode/<I><FONT COLOR=0000FF>${ALG}</FONT></I>_tb.vhd  >> <I><FONT COLOR=0000FF>${LOG}</FONT></I>
+
+<B>echo</B> "- Reporting Warnings:"
+grep -i "** Warn" <I><FONT COLOR=0000FF>${LOG}</FONT></I> | nl
+<B>echo</B> "- Reporting Errors:"
+grep -i "** Err" <I><FONT COLOR=0000FF>${LOG}</FONT></I> | grep -v "Compiler exiting" | nl
+<B>echo</B> "* <B>Done</B>"
+
+
+<B>echo</B> 
+<I><FONT COLOR=#808080>#echo vsim-$VER -t 1ps -lib $LIB </FONT></I>
+<B>echo</B> "vsim-<I><FONT COLOR=0000FF>$VER</FONT></I> -c -t 1ps -lib <I><FONT COLOR=0000FF>$LIB</FONT></I>  \\\
+          -voptargs="\""+acc=mnp"\""  \\\
+          -L uk65lscllmvbbr_vlog  \\\
+          -L uk65lscllmvbbh_vlog  \\\
+          -L uk65lscllmvbbl_vlog  \\\
+          -sdftyp DUT=<I><FONT COLOR=0000FF>${DIR}</FONT></I>/<I><FONT COLOR=0000FF>${ALG}</FONT></I>.sdf.gz +sdf_verbose  \\\
+          -v2k_int_delays +no_glitch_msg  \\\
+	  -<B>do</B> "\""run -all; quit"\""  \\\
+          <I><FONT COLOR=0000FF>${ALG}</FONT></I>_tb | tee ../simvectors/<I><FONT COLOR=0000FF>${ALG}</FONT></I>_sim_gate.rpt "
+<B>echo</B>
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

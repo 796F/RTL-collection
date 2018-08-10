@@ -1,0 +1,213 @@
+<HTML>
+<TITLE>
+ gmu_keccak/sourcecode/keccak_round_rogawski.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.keccak_pkg.all;
+	
+<I><FONT COLOR=#808080>-- implementation of Keccak round: there are two basic architectures of Keccak function</FONT></I>
+<I><FONT COLOR=#808080>-- Guido Bertoni implementation of Keccak round - streightforward</FONT></I>
+<I><FONT COLOR=#808080>-- Marcin Rogawski implementation of Keccak round - based on C implementation </FONT></I>
+<I><FONT COLOR=#808080>-- Marcin Rogawski implementation is smaller and faster on Altera (Stratix II-IV, Cyclone II-IV)</FONT></I>
+<I><FONT COLOR=#808080>-- and Xilinx (Virtex 4-6, Spartan 3 and 6)	devices than Guido Bertoni implementation</FONT></I>
+<B>entity</B> keccak_round <B>is</B>
+<B>port</B> (
+    rin     			: <B>in</B> std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0);
+    rc			   	 	: <B>in</B> std_logic_vector(63 <B>downto</B> 0);
+    rout    			: <B>out</B> std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0));
+<B>end</B> keccak_round;
+
+
+<B>architecture</B> mrogawski_round <B>of</B> keccak_round <B>is</B> 
+
+<B>signal</B> Aba, Abe, Abi, Abo, Abu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Aga, Age, Agi, Ago, Agu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Aka, Ake, Aki, Ako, Aku: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Ama, Ame, Ami, Amo, Amu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Asa, Ase, Asi, Aso, Asu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Aba_wire, Abe_wire, Abi_wire, Abo_wire, Abu_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Aga_wire, Age_wire, Agi_wire, Ago_wire, Agu_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Aka_wire, Ake_wire, Aki_wire, Ako_wire, Aku_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Ama_wire, Ame_wire, Ami_wire, Amo_wire, Amu_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Asa_wire, Ase_wire, Asi_wire, Aso_wire, Asu_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Bba, Bbe, Bbi, Bbo, Bbu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Bga, Bge, Bgi, Bgo, Bgu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Bka, Bke, Bki, Bko, Bku: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Bma, Bme, Bmi, Bmo, Bmu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Bsa, Bse, Bsi, Bso, Bsu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Ca, Ce, Ci, Co, Cu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Da, De, Di, Do, Du: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Eba, Ebe, Ebi, Ebo, Ebu ,Eba_wire: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Ega, Ege, Egi, Ego, Egu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Eka, Eke, Eki, Eko, Eku: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Ema, Eme, Emi, Emo, Emu: std_logic_vector(63 <B>downto</B> 0); 
+<B>signal</B> Esa, Ese, Esi, Eso, Esu: std_logic_vector(63 <B>downto</B> 0); 
+
+<B>begin</B> 
+	
+	Aba	<= rin(1599 <B>downto</B> 1536); 
+	Abe	<= rin(1535 <B>downto</B> 1472); 
+	Abi	<= rin(1471 <B>downto</B> 1408); 
+	Abo	<= rin(1407 <B>downto</B> 1344); 
+	Abu	<= rin(1343 <B>downto</B> 1280);
+	Aga	<= rin(1279 <B>downto</B> 1216); 
+	Age	<= rin(1215 <B>downto</B> 1152); 
+	Agi	<= rin(1151 <B>downto</B> 1088); 
+	Ago	<= rin(1087 <B>downto</B> 1024); 
+	Agu	<= rin(1023 <B>downto</B> 960);
+	Aka	<= rin(959 <B>downto</B> 896); 
+	Ake	<= rin(895 <B>downto</B> 832); 
+	Aki	<= rin(831 <B>downto</B> 768); 
+	Ako	<= rin(767 <B>downto</B> 704); 
+	Aku	<= rin(703 <B>downto</B> 640);
+	Ama	<= rin(639 <B>downto</B> 576); 
+	Ame	<= rin(575 <B>downto</B> 512); 
+	Ami	<= rin(511 <B>downto</B> 448); 
+	Amo	<= rin(447 <B>downto</B> 384); 
+	Amu	<= rin(383 <B>downto</B> 320);
+	Asa	<= rin(319 <B>downto</B> 256); 
+	Ase	<= rin(255 <B>downto</B> 192); 
+	Asi	<= rin(191 <B>downto</B> 128); 
+	Aso	<= rin(127 <B>downto</B> 64); 
+	Asu	<= rin(63 <B>downto</B> 0); 
+ 	
+	Ca <= Aba <B>xor</B> Aga <B>xor</B> Aka <B>xor</B> Ama <B>xor</B> Asa; 
+	Ce <= Abe <B>xor</B> Age <B>xor</B> Ake <B>xor</B> Ame <B>xor</B> Ase; 
+	Ci <= Abi <B>xor</B> Agi <B>xor</B> Aki <B>xor</B> Ami <B>xor</B> Asi; 
+	Co <= Abo <B>xor</B> Ago <B>xor</B> Ako <B>xor</B> Amo <B>xor</B> Aso; 
+	Cu <= Abu <B>xor</B> Agu <B>xor</B> Aku <B>xor</B> Amu <B>xor</B> Asu; 
+	
+	
+	Da <= Cu <B>xor</B> rolx(Ce, 1); 
+	De <= Ca <B>xor</B> rolx(Ci, 1); 
+	Di <= Ce <B>xor</B> rolx(Co, 1); 
+	Do <= Ci <B>xor</B> rolx(Cu, 1); 
+	Du <= Co <B>xor</B> rolx(Ca, 1); 
+	
+	Aba_wire <= Aba <B>xor</B> Da;
+	Bba <= Aba_wire; 
+
+	Age_wire <= Age <B>xor</B> De; 
+	Bbe <= rolx(Age_wire, 44); 
+	Aki_wire <= Aki <B>xor</B> Di; 
+	Bbi <= rolx(Aki_wire, 43); 
+	Eba_wire <=  Bba  <B>xor</B> ((<B>not</B> Bbe) <B>and</B> Bbi); 
+	Eba <= Eba_wire <B>xor</B> rc; 
+	Amo_wire <= Amo <B>xor</B> Do; 
+	Bbo <= rolx(Amo_wire, 21); 
+	Ebe <= Bbe <B>xor</B> ((<B>not</B> Bbi) <B>and</B> Bbo); 
+	Asu_wire <= Asu <B>xor</B> Du; 
+	Bbu <= rolx(Asu_wire, 14); 
+	Ebi <= Bbi <B>xor</B> ((<B>not</B> Bbo) <B>and</B> Bbu); 
+	Ebo <= Bbo <B>xor</B> ((<B>not</B> Bbu) <B>and</B> Bba); 
+	Ebu <= Bbu <B>xor</B> ((<B>not</B> Bba) <B>and</B> Bbe); 
+	Abo_wire <= Abo <B>xor</B> Do; 
+	Bga <= rolx(Abo_wire, 28); 
+	Agu_wire <= Agu <B>xor</B> Du; 
+	Bge <= rolx(Agu_wire, 20); 
+	Aka_wire <= Aka <B>xor</B> Da; 
+	Bgi <= rolx(Aka_wire, 3); 
+	Ega <=  Bga  <B>xor</B> ((<B>not</B> Bge)<B>and</B> Bgi); 
+	Ame_wire <= Ame <B>xor</B> De; 
+	Bgo <= rolx(Ame_wire, 45); 
+	Ege <= Bge <B>xor</B> ((<B>not</B> Bgi)<B>and</B> Bgo);
+	Asi_wire <= Asi  <B>xor</B> Di; 
+	Bgu <= rolx(Asi_wire, 61); 
+	Egi <= Bgi <B>xor</B> ((<B>not</B> Bgo)<B>and</B> Bgu); 
+	Ego <= Bgo <B>xor</B> ((<B>not</B> Bgu)<B>and</B> Bga); 
+	Egu <= Bgu <B>xor</B> ((<B>not</B> Bga)<B>and</B> Bge); 
+	Abe_wire <= Abe <B>xor</B> De; 
+	Bka <= rolx(Abe_wire, 1); 
+	Agi_wire <=  Agi <B>xor</B> Di; 
+	Bke <= rolx(Agi_wire, 6); 
+	Ako_wire <= Ako <B>xor</B> Do; 
+	Bki <= rolx(Ako_wire, 25); 
+	Eka <= Bka  <B>xor</B> ((<B>not</B> Bke)<B>and</B> Bki); 
+	Amu_wire <=  Amu <B>xor</B> Du; 
+	Bko <= rolx(Amu_wire, 8); 
+	Eke <= Bke <B>xor</B> ((<B>not</B> Bki) <B>and</B> Bko); 
+	Asa_wire <= Asa <B>xor</B> Da; 
+	Bku <= rolx(Asa_wire, 18); 
+	Eki <= Bki <B>xor</B> ((<B>not</B> Bko)<B>and</B> Bku); 
+	Eko <= Bko <B>xor</B> ((<B>not</B> Bku)<B>and</B> Bka); 
+	Eku <= Bku <B>xor</B> ((<B>not</B> Bka)<B>and</B> Bke); 
+	Abu_wire <= Abu <B>xor</B> Du; 
+	Bma <= rolx(Abu_wire, 27); 
+	Aga_wire <= Aga <B>xor</B> Da; 
+	Bme <= rolx(Aga_wire, 36); 
+	Ake_wire <= Ake <B>xor</B> De; 
+	Bmi <= rolx(Ake_wire, 10); 
+	Ema <= Bma  <B>xor</B> ((<B>not</B> Bme)<B>and</B> Bmi); 
+	Ami_wire <= Ami <B>xor</B> Di; 
+	Bmo <= rolx(Ami_wire, 15); 
+	Eme <=  Bme <B>xor</B> ((<B>not</B> Bmi)<B>and</B> Bmo); 
+	Aso_wire <=  Aso <B>xor</B> Do; 
+	Bmu <= rolx(Aso_wire, 56); 
+	Emi <= Bmi <B>xor</B> ((<B>not</B> Bmo)<B>and</B> Bmu); 
+	Emo <= Bmo <B>xor</B> ((<B>not</B> Bmu)<B>and</B> Bma); 
+	Emu <= Bmu <B>xor</B> ((<B>not</B> Bma)<B>and</B> Bme); 
+	Abi_wire <= Abi <B>xor</B> Di; 
+	Bsa <= rolx(Abi_wire, 62); 
+	Ago_wire <= Ago <B>xor</B> Do; 
+	Bse <= rolx(Ago_wire, 55); 
+	Aku_wire <= Aku <B>xor</B> Du; 
+	Bsi <= rolx(Aku_wire, 39); 
+	Esa <= Bsa <B>xor</B> ((<B>not</B> Bse)<B>and</B> Bsi); 
+	Ama_wire <= Ama <B>xor</B> Da; 
+	Bso <= rolx(Ama_wire, 41); 
+	Ese <=  Bse <B>xor</B> ((<B>not</B> Bsi)<B>and</B> Bso); 
+	Ase_wire <= Ase <B>xor</B> De; 
+	Bsu <= rolx(Ase_wire, 2); 
+	Esi <= Bsi  <B>xor</B> ((<B>not</B> Bso) <B>and</B> Bsu); 
+	Eso <= Bso  <B>xor</B> ((<B>not</B> Bsu)<B>and</B> Bsa); 
+	Esu <= Bsu  <B>xor</B> ((<B>not</B> Bsa)<B>and</B> Bse);    
+	
+	rout(1599 <B>downto</B> 1536) <= Eba; 
+	rout(1535 <B>downto</B> 1472) <= Ebe; 
+	rout(1471 <B>downto</B> 1408) <= Ebi; 
+	rout(1407 <B>downto</B> 1344)<= Ebo; 
+	rout(1343 <B>downto</B> 1280)<= Ebu;
+	rout(1279 <B>downto</B> 1216)<= Ega; 
+	rout(1215 <B>downto</B> 1152)<= Ege; 
+	rout(1151 <B>downto</B> 1088)<= Egi; 
+	rout(1087 <B>downto</B> 1024)<= Ego; 
+	rout(1023 <B>downto</B> 960)<= Egu;
+	rout(959 <B>downto</B> 896)<= Eka; 
+	rout(895 <B>downto</B> 832)<= Eke; 
+	rout(831 <B>downto</B> 768)<= Eki; 
+	rout(767 <B>downto</B> 704)<= Eko; 
+	rout(703 <B>downto</B> 640)<= Eku;
+	rout(639 <B>downto</B> 576)<= Ema; 
+	rout(575 <B>downto</B> 512)<= Eme; 
+	rout(511 <B>downto</B> 448)<= Emi; 
+	rout(447 <B>downto</B> 384)<= Emo; 
+	rout(383 <B>downto</B> 320)<= Emu;
+	rout(319 <B>downto</B> 256)<= Esa; 
+	rout(255 <B>downto</B> 192)<= Ese; 
+	rout(191 <B>downto</B> 128)<= Esi; 
+	rout(127 <B>downto</B> 64)<= Eso; 
+	rout(63 <B>downto</B> 0)<= Esu; 
+	
+	
+<B>end</B>;	   
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

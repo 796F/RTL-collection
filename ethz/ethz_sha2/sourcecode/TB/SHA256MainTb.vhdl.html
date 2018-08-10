@@ -1,0 +1,198 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/TB/SHA256MainTb.vhdl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>use</B> std.textio.all;
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_textio.all;  <I><FONT COLOR=#808080>-- read and write overloaded for std_logic</FONT></I>
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.simulstuff.all;
+<B>use</B> work.SHA256MainTbPkg.all;
+<B>use</B> work.sha_pack.all;
+<B>use</B> ieee.numeric_std.all;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>entity</B> SHA256MainTb <B>is</B>
+  <I><FONT COLOR=#808080>-- a testbench does not connect to any higher level of hierarchy</FONT></I>
+<B>end</B> SHA256MainTb;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>architecture</B> behavioral <B>of</B> SHA256MainTb <B>is</B>
+
+  <B>component</B> SHA256Main
+    <B>port</B> (
+      <FONT COLOR=#804040>MessageInxDI</FONT>       : <B>in</B>  expmess_arr;
+      <FONT COLOR=#804040>HInxDI</FONT>             : <B>in</B>  h_arr;
+      <FONT COLOR=#32CD32>CLKxCI</FONT>             : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>            : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>        : <B>out</B> std_logic;
+      <FONT COLOR=#804040>HOutxDO</FONT>            : <B>out</B> h_arr;
+      <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>    : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> : <B>out</B> std_logic);
+  <B>end</B> <B>component</B>;
+
+
+
+  <B>file</B> exprespfile   : <FONT COLOR=#CCA800>text</FONT> open read_mode <B>is</B> EXPRESP_FILENAME;
+  <B>signal</B> <FONT COLOR=#804040>MessageInxD</FONT> : expmess_arr;
+  <B>signal</B> <FONT COLOR=#804040>HInxD</FONT>       : h_arr;           <I><FONT COLOR=#808080>-- input values of H</FONT></I>
+  <B>signal</B> <FONT COLOR=#FF6347>RSTxRB</FONT>      : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>  : std_logic;
+
+
+  <B>signal</B> <FONT COLOR=#804040>HOutxD</FONT>            : h_arr;
+  <B>signal</B> <FONT COLOR=#1E90FF>MessageReadyxS</FONT>    : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>MessageReceivedxS</FONT> : std_logic;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- BEGIN</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>begin</B>
+
+  SHA256Main_1 : SHA256Main
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>MessageInxDI</FONT>       => <FONT COLOR=#804040>MessageInxD</FONT>,
+      <FONT COLOR=#804040>HInxDI</FONT>             => <FONT COLOR=#804040>HInxD</FONT>,
+      <FONT COLOR=#32CD32>CLKxCI</FONT>             => <FONT COLOR=#32CD32>CLKxC</FONT>,
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>            => <FONT COLOR=#FF6347>RSTxRB</FONT>,
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>        => <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>,
+      <FONT COLOR=#804040>HOutxDO</FONT>            => <FONT COLOR=#804040>HOutxD</FONT>,
+      <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>    => <FONT COLOR=#1E90FF>MessageReadyxS</FONT>,
+      <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> => <FONT COLOR=#1E90FF>MessageReceivedxS</FONT>);
+
+<I><FONT COLOR=#808080>--  ExpResPickup : process</FONT></I>
+<I><FONT COLOR=#808080>--    variable ResponsexD : responseRecordType;</FONT></I>
+<I><FONT COLOR=#808080>--  begin</FONT></I>
+
+<I><FONT COLOR=#808080>--    PickupLoop : loop  </FONT></I>
+<I><FONT COLOR=#808080>--      wait until (CLKxC'event and CLKxC = '1') or EndOfSimxS = true;</FONT></I>
+
+<I><FONT COLOR=#808080>--      -- leave the loop if there are no more stimuli left</FONT></I>
+<I><FONT COLOR=#808080>--      exit PickupLoop when EndOfSimxS = true;</FONT></I>
+
+<I><FONT COLOR=#808080>--      if VALIDOUTxS = '1' then</FONT></I>
+<I><FONT COLOR=#808080>--        -- update expected response from file</FONT></I>
+<I><FONT COLOR=#808080>--        ResponsexD := GetExpectedResponseRecord(exprespfile);</FONT></I>
+<I><FONT COLOR=#808080>--        ExpResponseRecxD.HxD ResponsexD.HxD;</FONT></I>
+
+<I><FONT COLOR=#808080>--      end if;</FONT></I>
+
+<I><FONT COLOR=#808080>--   end loop PickupLoop;</FONT></I>
+
+<I><FONT COLOR=#808080>--    file_close(exprespfile);  -- close the file</FONT></I>
+<I><FONT COLOR=#808080>--    wait;</FONT></I>
+<I><FONT COLOR=#808080>--  end process ExpResPickup;</FONT></I>
+  
+
+  ClkGen : ClockGenerator(
+    <FONT COLOR=#32CD32>ClkxC</FONT>        => <FONT COLOR=#32CD32>CLKxC</FONT>,
+    CLKPHASELOW  => CLK_PHASE_LOW,
+    CLKPHASEHIGH => CLK_PHASE_HIGH);
+
+
+
+  <I><FONT COLOR=#808080>-- obtain stimuli and apply it to MUT</FONT></I>
+  <I><FONT COLOR=#808080>----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>StimAppli</FONT> : <B>process</B>
+  <B>begin</B>
+    
+    <FONT COLOR=#0000C0>AppliLoop</FONT> : <B>while</B> <B>not</B> (endfile(stimulifile)) <B>loop</B>
+      <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT> = '1';
+
+      <I><FONT COLOR=#808080>-- apply stimulus to MUT</FONT></I>
+      <FONT COLOR=#804040>StimuliRecxD</FONT> <= GetStimuliRecord(stimulifile);
+
+      <I><FONT COLOR=#808080>-- wait until time has come for stimulus application</FONT></I>
+      <B>wait</B> <B>for</B> STIMULI_APPLICATION_TIME;
+
+      <FONT COLOR=#804040>MessageInxD</FONT>    <= <FONT COLOR=#804040>StimuliRecxD</FONT>.<FONT COLOR=#804040>MessageInxD</FONT>;
+      <FONT COLOR=#804040>HInxD</FONT>          <= <FONT COLOR=#804040>StimuliRecxD</FONT>.<FONT COLOR=#804040>HInxD</FONT>;
+      <FONT COLOR=#FF6347>RSTxRB</FONT>         <= <FONT COLOR=#804040>StimuliRecxD</FONT>.<FONT COLOR=#FF6347>RSTxRB</FONT>;
+      <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= <FONT COLOR=#804040>StimuliRecxD</FONT>.<FONT COLOR=#1E90FF>MessageReadyxS</FONT>;
+      
+    <B>end</B> <B>loop</B> <FONT COLOR=#0000C0>AppliLoop</FONT>;
+
+    <I><FONT COLOR=#808080>-- tell clock generator to stop at the end of current cycle</FONT></I>
+    <I><FONT COLOR=#808080>-- because stimuli have been exhausted</FONT></I>
+    <FONT COLOR=#1E90FF>EndOfSimxS</FONT> <= true;
+    <I><FONT COLOR=#808080>-- close the file</FONT></I>
+    <B>file_close</B>(stimulifile);
+    <B>wait</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>StimAppli</FONT>;
+
+
+  <I><FONT COLOR=#808080>-- acquire actual response from MUT and have it checked</FONT></I>
+  <I><FONT COLOR=#808080>----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>RespAcqui</FONT> : <B>process</B>
+
+    <I><FONT COLOR=#808080>-- variables for accounting of mismatching responses</FONT></I>
+    <B>variable</B> respmatch       : respMatchArray;
+    <B>variable</B> respaccount     : respaccounttype := (0, 0, 0, 0, 0, 0);
+    <I><FONT COLOR=#808080>-- variable for counting the lines written to the simulation report</FONT></I>
+    <B>variable</B> simRepLineCount : natural         := 0;
+
+    <B>variable</B> <FONT COLOR=#804040>ResponsexD</FONT> : responseRecordType;
+
+  <B>begin</B>
+    <I><FONT COLOR=#808080>-- This wait statement is only useful if the stimuli file is empty. In that case</FONT></I>
+    <I><FONT COLOR=#808080>-- EndOfSimxS gets true after one delta delay. Without that wait statement</FONT></I>
+    <I><FONT COLOR=#808080>-- the following exit statement would be executed before EndOfSimxS gets true.</FONT></I>
+    <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT> = '0';
+
+    <FONT COLOR=#804040>ResponsexD</FONT>              := GetExpectedResponseRecord(exprespfile);
+    <FONT COLOR=#804040>ExpResponseRecxD</FONT>.<FONT COLOR=#804040>HOutxD</FONT> <= <FONT COLOR=#804040>ResponsexD</FONT>.<FONT COLOR=#804040>HOutxD</FONT>;
+
+    <FONT COLOR=#0000C0>AcquiLoop</FONT> : <B>loop</B>
+      <I><FONT COLOR=#808080>-- leave the loop if there are no more stimuli left</FONT></I>
+      <B>exit</B> AcquiLoop <B>when</B> <FONT COLOR=#1E90FF>EndOfSimxS</FONT> = true;
+
+      <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT> = '1';
+
+      <I><FONT COLOR=#808080>-- wait until time has come for response acquisition</FONT></I>
+      <B>wait</B> <B>for</B> RESPONSE_ACQUISITION_TIME;
+
+      <FONT COLOR=#804040>ActResponseRecxD</FONT>.<FONT COLOR=#804040>HOutxD</FONT> <= <FONT COLOR=#804040>HOutxD</FONT>;
+
+
+      <B>if</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT> = '1' <B>then</B>
+        <FONT COLOR=#804040>ResponsexD</FONT>              := GetExpectedResponseRecord(exprespfile);
+        <FONT COLOR=#804040>ExpResponseRecxD</FONT>.<FONT COLOR=#804040>HOutxD</FONT> <= <FONT COLOR=#804040>ResponsexD</FONT>.<FONT COLOR=#804040>HOutxD</FONT>;
+
+        <I><FONT COLOR=#808080>-- compare the actual with the expected responses</FONT></I>
+        CheckResponse(<FONT COLOR=#804040>ActResponseRecxD</FONT>, <FONT COLOR=#804040>ExpResponseRecxD</FONT>,
+                      respmatch, respaccount);
+
+        <I><FONT COLOR=#808080>-- add a trace line to report file</FONT></I>
+        PutSimulationReportTrace(simreptfile, <FONT COLOR=#804040>StimuliRecxD</FONT>, <FONT COLOR=#804040>ActResponseRecxD</FONT>,
+                                 respmatch, respaccount, simRepLineCount);
+
+        <I><FONT COLOR=#808080>-- add extra failure message to report file if necessary</FONT></I>
+        PutSimulationReportFailure(simreptfile, <FONT COLOR=#804040>ExpResponseRecxD</FONT>, respmatch);
+
+      <B>end</B> <B>if</B>;
+
+    <B>end</B> <B>loop</B> <FONT COLOR=#0000C0>AcquiLoop</FONT>;
+
+    <I><FONT COLOR=#808080>-- when the present clock cycle is the final one of this run</FONT></I>
+    <I><FONT COLOR=#808080>-- then establish a simulation report summary and write it to file</FONT></I>
+    PutSimulationReportSummary(simreptfile, respaccount);
+    <I><FONT COLOR=#808080>-- close the file</FONT></I>
+    <B>file_close</B>(simreptfile);
+    <B>file_close</B>(exprespfile);
+    <B>report</B> "Simulation run completed!";
+    <B>wait</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>RespAcqui</FONT>;
+  
+<B>end</B> <B>architecture</B> <FONT COLOR=#0000C0>behavioral</FONT>;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,347 @@
+<HTML>
+<TITLE>
+ ethz_sha2/synopsys/scripts/sha3_syn.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># v0.7 -  - Sat Sep 17 15:21:25 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - added a way to enable multi core. It will check a file called</FONT></I>
+<I><FONT COLOR=#808080>#   run_multi_core in the synopsys directory</FONT></I>
+<I><FONT COLOR=#808080># v0.6 -  - Tue Sep 13 09:51:20 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - wireload.tcl will be executed only when one clock is in the clocklist</FONT></I>
+<I><FONT COLOR=#808080># v0.5 -  - Mon Sep 12 17:21:44 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - more reports on the end.</FONT></I>
+<I><FONT COLOR=#808080># v0.4 -  - Mon Sep 12 17:21:44 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - added the (optional) wireload, increased the max_fanout number to 1200</FONT></I>
+<I><FONT COLOR=#808080># v0.3 -  - Tue Sep  6 09:23:21 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - write per clock _scan.ddc</FONT></I>
+<I><FONT COLOR=#808080>#   check if for elaborate or compile script exists and source if it does</FONT></I>
+<I><FONT COLOR=#808080># v0.2 -  - Mon Sep  5 14:01:00 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - changed the library seting, new the cornner have to be set (set corner  XX)</FONT></I>
+<I><FONT COLOR=#808080># v0.1 -  - Thu Sep  1 09:32:11 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - pretty the first version</FONT></I>
+
+<I><FONT COLOR=#808080># -- clean start </FONT></I>
+<B><FONT COLOR=008000>remove_design</FONT></B> <I><FONT COLOR=AA0000>-design</FONT></I> 
+<B><FONT COLOR=008000>sh</FONT></B> rm <I><FONT COLOR=AA0000>-rf</FONT></I> WORK/*
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>NumberThreads</FONT></I> [<B>exec</B> cat /<B>proc</B>/cpuinfo | grep <I><FONT COLOR=AA0000>-c</FONT></I> processor]
+
+<I><FONT COLOR=#808080># there is not much improvement with this at the moment </FONT></I>
+<B>if</B> {[<B>file</B> exists ./run_multi_core]} {
+  <B>puts</B> "*<B>INFO</B>: run_multi_core detected!"
+  <B><FONT COLOR=008000>set_host_options</FONT></B> <I><FONT COLOR=AA0000>-max_cores</FONT></I> <I><FONT COLOR=0000FF>$NumberThreads</FONT></I>
+} 
+
+
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># Default Setings</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>CLOCKLIST</FONT></I> { 1 }
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>IN</FONT></I>  0
+<B><B>set</B> </B><I><FONT COLOR=0000FF>OUT</FONT></I> 0
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>PAD_IN</FONT></I>   0
+<B><B>set</B> </B><I><FONT COLOR=0000FF>PAD_OUT</FONT></I>  0
+<B><B>set</B> </B><I><FONT COLOR=0000FF>CLK_TREE</FONT></I> 0
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LIB</FONT></I>       u065gioll25mvir_25_wc
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_CELL</FONT></I> IUMB
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_PIN</FONT></I>  DI
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_CELL</FONT></I> IUMB
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_PIN</FONT></I>  DO
+
+<I><FONT COLOR=#808080># high fanout threshold, we have 1088 bit wide things</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>high_fanout_net_threshold</FONT></I> 1200
+
+<I><FONT COLOR=#808080># -- sets for every case a list</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>libraryset</FONT></I>("wc") [<B>list</B> uk65lscllmvbbr_108c125_wc.db uk65lscllmvbbl_108c125_wc.db uk65lscllmvbbh_108c125_wc.db u065gioll25mvir_25_wc.db]
+<B><B>set</B> </B><I><FONT COLOR=0000FF>libraryset</FONT></I>("tc") [<B>list</B> uk65lscllmvbbr_120c25_tc.db uk65lscllmvbbl_120c25_tc.db uk65lscllmvbbh_120c25_tc.db u065gioll25mvir_25_tc.db]
+<B><B>set</B> </B><I><FONT COLOR=0000FF>libraryset</FONT></I>("bc") [<B>list</B> uk65lscllmvbbr_132c0_bc.db uk65lscllmvbbl_132c0_bc.db uk65lscllmvbbh_132c0_bc.db u065gioll25mvir_25_bc.db]
+
+<I><FONT COLOR=#808080># -- driver library the same way</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>driverlibrary</FONT></I>("wc") uk65lscllmvbbr_108c125_wc
+<B><B>set</B> </B><I><FONT COLOR=0000FF>driverlibrary</FONT></I>("tc") uk65lscllmvbbr_120c25_tc
+<B><B>set</B> </B><I><FONT COLOR=0000FF>driverlibrary</FONT></I>("bc") uk65lscllmvbbr_132c0_bc
+
+
+<I><FONT COLOR=#808080># -- Overwrites the target_library set by .synopsys_dc.setup  withe the Worst Case lib</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>corner</FONT></I>         wc
+
+<B>if</B> {[<B>file</B> exists ./scripts/design_settings.tcl]} {
+  <B>source</B> ./scripts/design_settings.tcl
+} <B>else</B> {
+  <B>puts</B> "*WARNING: Default setings are taken, no design_settings.tcl <B>file</B> exists!"
+}
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>target_library</FONT></I> <I><FONT COLOR=0000FF>$libraryset</FONT></I>("<I><FONT COLOR=0000FF>$corner</FONT></I>")
+<B><B>set</B> </B><I><FONT COLOR=0000FF>link_library</FONT></I>   [<B>concat</B> [<B>list</B> "*"] <I><FONT COLOR=0000FF>$libraryset</FONT></I>("<I><FONT COLOR=0000FF>$corner</FONT></I>")] 
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>path</FONT></I> [<B>pwd</B>]
+<B>regexp</B>  {(ethz_)([^/]+)/[^/]+$} <I><FONT COLOR=0000FF>$path</FONT></I> matched namep1 namep2
+<B>regexp</B>  {(gmu_)([^/]+)/[^/]+$} <I><FONT COLOR=0000FF>$path</FONT></I> matched namep1 namep2
+
+<B>if</B> { <I><FONT COLOR=0000FF>$namep1</FONT></I>  == "ethz_" } {
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>top_block</FONT></I> <I><FONT COLOR=0000FF>${namep1}</FONT></I><I><FONT COLOR=0000FF>${namep2}</FONT></I>
+} <B>else</B> {
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>top_block</FONT></I> <I><FONT COLOR=0000FF>${namep1}</FONT></I><I><FONT COLOR=0000FF>${namep2}</FONT></I>_top
+} 
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>savename</FONT></I>   <I><FONT COLOR=0000FF>${namep1}</FONT></I><I><FONT COLOR=0000FF>${namep2}</FONT></I>
+
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># Analyze Design</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>list_file</FONT></I> [<B>open</B> "../sourcecode/<B>source</B>.<B>list</B>" r]
+<B><B>set</B> </B><I><FONT COLOR=0000FF>vhdl_file_list</FONT></I> ""
+
+<B>while</B> {[<B>gets</B> <I><FONT COLOR=0000FF>$list_file</FONT></I> line] != <I><FONT COLOR=AA0000>-1</FONT></I>} {
+<I><FONT COLOR=#808080>#  if {[regexp -all -inline {\W} $line] } </FONT></I>
+  <B>if</B> { "" != <I><FONT COLOR=0000FF>$line</FONT></I> } {
+<I><FONT COLOR=#808080>#    puts "$line"</FONT></I>
+    <B>lappend</B> vhdl_file_list ../sourcecode/<I><FONT COLOR=0000FF>$line</FONT></I>
+  }  
+}
+
+<B>close</B> <I><FONT COLOR=0000FF>$list_file</FONT></I>
+
+
+<B><FONT COLOR=008000>analyze</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> WORK <I><FONT COLOR=AA0000>-<B>format</B></FONT></I> vhdl   <I><FONT COLOR=0000FF>$vhdl_file_list</FONT></I>
+<I><FONT COLOR=#808080>#read_file -library WORK -format vhdl   $vhdl_file_list-all_feature</FONT></I>
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># Elaborate design</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+
+<I><FONT COLOR=#808080># -- elaborate the design </FONT></I>
+<B>if</B> {[<B>file</B> exists ./scripts/<B><FONT COLOR=008000>elaborate</FONT></B>.tcl]} {
+  <B>puts</B> "*<B>INFO</B>: <B><FONT COLOR=008000>elaborate</FONT></B>.tcl exists and will be sourced instead"
+  <B>source</B> ./scripts/<B><FONT COLOR=008000>elaborate</FONT></B>.tcl
+} <B>else</B> {
+  <B><FONT COLOR=008000>elaborate</FONT></B> <I><FONT COLOR=0000FF>${top_block}</FONT></I>
+}
+
+<I><FONT COLOR=#808080># if there is a script to add the wireload, do it here </FONT></I>
+
+<I><FONT COLOR=#808080># disabled this feature.. always wireload -kgf </FONT></I>
+<I><FONT COLOR=#808080>#if {[file exists ./scripts/wireload.tcl] && [llength $CLOCKLIST] == 1 } {</FONT></I>
+
+<B>if</B> {[<B>file</B> exists ./scripts/wireload.tcl] } {
+  <B>puts</B> "*<B>INFO</B>: wireload.tcl exists and will be executed"
+  <B>source</B> ./scripts/wireload.tcl
+}
+
+
+<B><FONT COLOR=008000>write</FONT></B> <I><FONT COLOR=AA0000>-f</FONT></I> ddc <I><FONT COLOR=AA0000>-h</FONT></I> <I><FONT COLOR=AA0000>-o</FONT></I> DDC/<I><FONT COLOR=0000FF>${savename}</FONT></I>_elaborate.ddc
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># loops all clock periods</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<B>foreach</B> CLOCK <I><FONT COLOR=0000FF>$CLOCKLIST</FONT></I> {
+<I><FONT COLOR=#808080># set CLOCK [lindex $CLOCKLIST 0]</FONT></I>
+
+  <B>puts</B> "*<B>INFO</B>: clock period is: <I><FONT COLOR=0000FF>$CLOCK</FONT></I>"
+
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>reportname</FONT></I> <I><FONT COLOR=0000FF>${namep1}</FONT></I><I><FONT COLOR=0000FF>${namep2}</FONT></I>_<I><FONT COLOR=0000FF>${CLOCK}</FONT></I>_<I><FONT COLOR=0000FF>${corner}</FONT></I>
+
+  <B><FONT COLOR=008000>remove_design</FONT></B> <I><FONT COLOR=AA0000>-design</FONT></I>
+  <B><FONT COLOR=008000>read_ddc</FONT></B> DDC/<I><FONT COLOR=0000FF>${savename}</FONT></I>_elaborate.ddc
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># set up timing constraints</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080># -- pessimistic wire load model</FONT></I>
+  <I><FONT COLOR=#808080>#set_wire_load_mode top</FONT></I>
+
+  <B><FONT COLOR=008000>current_design</FONT></B> <I><FONT COLOR=0000FF>${top_block}</FONT></I>
+
+  <I><FONT COLOR=#808080># create the main Clock</FONT></I>
+  <B><FONT COLOR=008000>create_clock</FONT></B> ClkxCI <I><FONT COLOR=AA0000>-period</FONT></I> <I><FONT COLOR=0000FF>$CLOCK</FONT></I>
+
+  <I><FONT COLOR=#808080># clocked inputs have the input delay minus the clock tree</FONT></I>
+  <B><FONT COLOR=008000>set_input_delay</FONT></B>  [<B>expr</B> <I><FONT COLOR=0000FF>$IN</FONT></I> + <I><FONT COLOR=0000FF>$CLK_TREE</FONT></I>]  <I><FONT COLOR=AA0000>-clock</FONT></I> ClkxCI  [all_inputs]
+   
+  <I><FONT COLOR=#808080># These are the outputs that go to next stage  </FONT></I>
+  <B><FONT COLOR=008000>set_output_delay</FONT></B> [<B>expr</B> <I><FONT COLOR=0000FF>$OUT</FONT></I> + <I><FONT COLOR=0000FF>$PAD_OUT</FONT></I> - <I><FONT COLOR=0000FF>$CLK_TREE</FONT></I>] <I><FONT COLOR=AA0000>-clock</FONT></I> ClkxCI  [all_outputs]
+
+  <I><FONT COLOR=#808080># All inputs are the pads</FONT></I>
+  <B><FONT COLOR=008000>set_driving_cell</FONT></B>  <I><FONT COLOR=AA0000>-no_design_rule</FONT></I> <I><FONT COLOR=AA0000>-library</FONT></I> <I><FONT COLOR=0000FF>${LIB}</FONT></I> <I><FONT COLOR=AA0000>-lib_cell</FONT></I> <I><FONT COLOR=0000FF>${DRIV_CELL}</FONT></I> <I><FONT COLOR=AA0000>-pin</FONT></I> <I><FONT COLOR=0000FF>${DRIV_PIN}</FONT></I> \
+                     [<B>remove_from_collection</B> [all_inputs] ClkxCI]  
+
+  <I><FONT COLOR=#808080># all Outputs have the equivalent load of an output pad</FONT></I>
+  <B><FONT COLOR=008000>set_load</FONT></B> [<B><FONT COLOR=008000>load_of</FONT></B> <I><FONT COLOR=0000FF>${LIB}</FONT></I>/<I><FONT COLOR=0000FF>${LOAD_CELL}</FONT></I>/<I><FONT COLOR=0000FF>${LOAD_PIN}</FONT></I>] [all_outputs]
+
+  <I><FONT COLOR=#808080># set the false path here </FONT></I>
+  <B><FONT COLOR=008000>set_false_path</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [get_ports {ScanEnxTI}]
+
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># set up DFT constraints </FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+  
+  <B><FONT COLOR=008000>reset_dft_configuration</FONT></B>
+  
+  <B><FONT COLOR=008000>set_dft_insertion_configuration</FONT></B> <I><FONT COLOR=AA0000>-synthesis_optimization</FONT></I> none
+  <B><B>set</B> </B><I><FONT COLOR=0000FF>test_disable_enhanced_dft_drc_report</FONT></I> FALSE
+  
+  <I><FONT COLOR=#808080>#set_scan_configuration -replace false</FONT></I>
+  <B><FONT COLOR=008000>set_scan_configuration</FONT></B> <I><FONT COLOR=AA0000>-style</FONT></I> multiplexed_flip_flop
+<I><FONT COLOR=#808080>#  set_scan_configuration -clock_mixing mix_clocks</FONT></I>
+  
+  <I><FONT COLOR=#808080># -- define scan relatet signals</FONT></I>
+<I><FONT COLOR=#808080>#  set_dft_signal -view spec         -type ScanClock  -port ClkxCI</FONT></I>
+  <B><FONT COLOR=008000>set_dft_signal</FONT></B> <I><FONT COLOR=AA0000>-view</FONT></I> existing_dft <I><FONT COLOR=AA0000>-type</FONT></I> ScanClock  <I><FONT COLOR=AA0000>-port</FONT></I> ClkxCI <I><FONT COLOR=AA0000>-timing</FONT></I> {45 55}
+<I><FONT COLOR=#808080>#  set_dft_signal -view spec         -type Reset      -port RstxRBI</FONT></I>
+  <B><FONT COLOR=008000>set_dft_signal</FONT></B> <I><FONT COLOR=AA0000>-view</FONT></I> existing_dft <I><FONT COLOR=AA0000>-type</FONT></I> Reset      <I><FONT COLOR=AA0000>-port</FONT></I> RstxRBI <I><FONT COLOR=AA0000>-active_state</FONT></I> 0
+  <B><FONT COLOR=008000>set_dft_signal</FONT></B> <I><FONT COLOR=AA0000>-view</FONT></I> spec         <I><FONT COLOR=AA0000>-type</FONT></I> ScanEnable <I><FONT COLOR=AA0000>-port</FONT></I> ScanEnxTI <I><FONT COLOR=AA0000>-active_state</FONT></I> 1
+  
+  <I><FONT COLOR=#808080># -- create 1 chains</FONT></I>
+  <B><FONT COLOR=008000>set_scan_configuration</FONT></B> <I><FONT COLOR=AA0000>-chain_count</FONT></I> 1
+  
+  <I><FONT COLOR=#808080># -- define scan chains</FONT></I>
+  <B><FONT COLOR=008000>set_dft_signal</FONT></B> <I><FONT COLOR=AA0000>-view</FONT></I> spec <I><FONT COLOR=AA0000>-type</FONT></I> ScanDataIn  <I><FONT COLOR=AA0000>-port</FONT></I> ScanInxTI
+  <B><FONT COLOR=008000>set_dft_signal</FONT></B> <I><FONT COLOR=AA0000>-view</FONT></I> spec <I><FONT COLOR=AA0000>-type</FONT></I> ScanDataOut <I><FONT COLOR=AA0000>-port</FONT></I> ScanOutxTO
+
+  <B><FONT COLOR=008000>create_test_protocol</FONT></B> 
+<I><FONT COLOR=#808080>#  create_test_protocol -infer_async -infer_clock</FONT></I>
+  <I><FONT COLOR=#808080>#write_test_protocol -o ./${savename}.spf</FONT></I>
+
+  <I><FONT COLOR=#808080># display report</FONT></I>
+<I><FONT COLOR=#808080>#  dft_drc</FONT></I>
+<I><FONT COLOR=#808080>#  report_dft_signal</FONT></I>
+<I><FONT COLOR=#808080>#  preview_dft</FONT></I>
+
+  <I><FONT COLOR=#808080># write out report</FONT></I>
+  <B><FONT COLOR=008000>dft_drc</FONT></B> <I><FONT COLOR=AA0000>-verbose</FONT></I>        >  reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_scanchain.rep
+  report_dft_signal       >> reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_scanchain.rep
+<I><FONT COLOR=#808080>#  preview_dft -show cells >> reports/${reportname}_scanchain.rep</FONT></I>
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># compilation</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>#uniquify</FONT></I>
+  
+  <I><FONT COLOR=#808080># -- check design for errors </FONT></I>
+  <I><FONT COLOR=#808080># display check</FONT></I>
+<I><FONT COLOR=#808080>#  check_design -multiple_designs -summary</FONT></I>
+<I><FONT COLOR=#808080>#  report_design</FONT></I>
+
+  <I><FONT COLOR=#808080># write out check</FONT></I>
+  <B><FONT COLOR=008000>check_design</FONT></B>  <I><FONT COLOR=AA0000>-multiple_designs</FONT></I>  >  reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_check_before_compile.rep
+  <B><FONT COLOR=008000>report_design</FONT></B>                    >  reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_report_before_compile.rep
+  
+<B>if</B> {[<B>file</B> exists ./scripts/<B><FONT COLOR=008000>compile</FONT></B>.tcl]} {
+  <B>puts</B> "*<B>INFO</B>: <B><FONT COLOR=008000>compile</FONT></B>.tcl <B>file</B> exists and will be sourced instead run <B><FONT COLOR=008000>compile_ultra</FONT></B>"
+  <B>source</B> ./scripts/<B><FONT COLOR=008000>compile</FONT></B>.tcl
+} <B>else</B> {
+  <B><FONT COLOR=008000>compile_ultra</FONT></B> <I><FONT COLOR=AA0000>-<B>scan</B></FONT></I> 
+  <I><FONT COLOR=#808080>#compile_ultra -scan -no_autoungroup</FONT></I>
+}
+  
+  <I><FONT COLOR=#808080>#write -f ddc -h -o DDC/${savename}_compile.ddc</FONT></I>
+  
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># Insert DFT</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------  </FONT></I>
+  <I><FONT COLOR=#808080># -- insert scan chains</FONT></I>
+  <B><FONT COLOR=008000>insert_dft</FONT></B>
+  
+  <I><FONT COLOR=#808080># display report</FONT></I>
+<I><FONT COLOR=#808080>#  dft_drc  -coverage_estimate</FONT></I>
+
+  <I><FONT COLOR=#808080># write out report</FONT></I>
+  <B><FONT COLOR=008000>report_scan_path</FONT></B>             >> reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_scanchain.rep
+  <B><FONT COLOR=008000>dft_drc</FONT></B>  <I><FONT COLOR=AA0000>-coverage_estimate</FONT></I>  >> reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_scanchain.rep
+
+  <I><FONT COLOR=#808080># need if "set_dft_insertion_configuration -synthesis_optimization none" is set,</FONT></I>
+  <I><FONT COLOR=#808080># so "insert_dft" is not doing a additional compile. Should be faster.</FONT></I>
+  <B><FONT COLOR=008000>compile_ultra</FONT></B> <I><FONT COLOR=AA0000>-incremental</FONT></I>
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># ScanEnxTI and RstxRBI</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------   </FONT></I>
+  <B><FONT COLOR=008000>report_net_fanout</FONT></B> <I><FONT COLOR=AA0000>-hi</FONT></I> > reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_fanout.rep
+
+  <B>foreach</B> SIG {RstxRBI ScanEnxTI} {
+    <B><FONT COLOR=008000>clean_buffer_tree</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> <I><FONT COLOR=0000FF>${SIG}</FONT></I>
+    <B><FONT COLOR=008000>balance_buffer</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> <I><FONT COLOR=0000FF>${SIG}</FONT></I> <I><FONT COLOR=AA0000>-prefer</FONT></I> BUFM16R <I><FONT COLOR=AA0000>-library</FONT></I> <I><FONT COLOR=0000FF>$driverlibrary</FONT></I>("<I><FONT COLOR=0000FF>$corner</FONT></I>")
+    <B><FONT COLOR=008000>report_buffer_tree</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> <I><FONT COLOR=0000FF>${SIG}</FONT></I> >> reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_fanout.rep
+  }
+  
+  <B><FONT COLOR=008000>write</FONT></B> <I><FONT COLOR=AA0000>-f</FONT></I> ddc <I><FONT COLOR=AA0000>-h</FONT></I> <I><FONT COLOR=AA0000>-o</FONT></I> DDC/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_scan.ddc
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># generate reports</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------   </FONT></I>
+  
+  <I><FONT COLOR=#808080># display some useful report</FONT></I>
+<I><FONT COLOR=#808080>#  report_timing </FONT></I>
+<I><FONT COLOR=#808080>#  report_area -hierarchy         </FONT></I>
+  
+  <I><FONT COLOR=#808080># write out report</FONT></I>
+  <B><FONT COLOR=008000>report_area</FONT></B> <I><FONT COLOR=AA0000>-hierarchy</FONT></I> <I><FONT COLOR=AA0000>-nosplit</FONT></I> > reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_area.rpt
+  
+  <B>echo</B> "IN2REG TIMING"                                                           >  ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_inputs] <I><FONT COLOR=AA0000>-to</FONT></I> [all_registers <I><FONT COLOR=AA0000>-data_pins</FONT></I>]                >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B>echo</B> "REG2REG TIMING"                                                          >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_registers <I><FONT COLOR=AA0000>-clock_pins</FONT></I>] <I><FONT COLOR=AA0000>-to</FONT></I> [all_registers <I><FONT COLOR=AA0000>-data_pins</FONT></I>] >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B>echo</B> "REG2OUT TIMING"                                                          >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_registers <I><FONT COLOR=AA0000>-clock_pins</FONT></I>] <I><FONT COLOR=AA0000>-to</FONT></I> [all_outputs]              >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B>echo</B> "IN2OUT TIMING"                                                           >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  <B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_inputs] <I><FONT COLOR=AA0000>-to</FONT></I> [all_outputs]                             >> ./reports/<I><FONT COLOR=0000FF>${reportname}</FONT></I>_timing.rep
+  
+}
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># Write out data (verilog netlist and DDC file)</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+
+<I><FONT COLOR=#808080># save the version including scan</FONT></I>
+<I><FONT COLOR=#808080>#write -f ddc -h -o DDC/${savename}_final.ddc</FONT></I>
+
+<B><FONT COLOR=008000>define_name_rules</FONT></B> verilog <I><FONT COLOR=AA0000>-add_dummy_nets</FONT></I>
+<B><FONT COLOR=008000>change_names</FONT></B> <I><FONT COLOR=AA0000>-h</FONT></I> <I><FONT COLOR=AA0000>-rules</FONT></I> verilog
+<B><FONT COLOR=008000>write</FONT></B> <I><FONT COLOR=AA0000>-h</FONT></I> <I><FONT COLOR=AA0000>-f</FONT></I> verilog <I><FONT COLOR=AA0000>-o</FONT></I> netlists/<I><FONT COLOR=0000FF>${savename}</FONT></I>.v
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># generate  report</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------   </FONT></I>
+
+<B><FONT COLOR=008000>report_area</FONT></B> <I><FONT COLOR=AA0000>-hierarchy</FONT></I> <I><FONT COLOR=AA0000>-nosplit</FONT></I>                                                >  ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_area.rpt
+
+<B><FONT COLOR=008000>report_net_fanout</FONT></B> <I><FONT COLOR=AA0000>-threshold</FONT></I> <I><FONT COLOR=0000FF>$high_fanout_net_threshold</FONT></I> <I><FONT COLOR=AA0000>-nosplit</FONT></I>               >  ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_high_fanout_net.rep  
+<B><FONT COLOR=008000>report_buffer_tree</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> <I><FONT COLOR=0000FF>${SIG}</FONT></I>                                                >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_high_fanout_net.rep
+
+<B>echo</B> "Clock period is: <I><FONT COLOR=0000FF>$CLOCK</FONT></I>"						                                     >  ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B>echo</B> "IN2REG TIMING"							                                             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_inputs] <I><FONT COLOR=AA0000>-to</FONT></I> [all_registers <I><FONT COLOR=AA0000>-data_pins</FONT></I>] 	             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B>echo</B> "REG2REG TIMING"							                                             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_registers <I><FONT COLOR=AA0000>-clock_pins</FONT></I>] <I><FONT COLOR=AA0000>-to</FONT></I> [all_registers <I><FONT COLOR=AA0000>-data_pins</FONT></I>] >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B>echo</B> "REG2OUT TIMING"							                                             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_registers <I><FONT COLOR=AA0000>-clock_pins</FONT></I>] <I><FONT COLOR=AA0000>-to</FONT></I> [all_outputs]	             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B>echo</B> "IN2OUT TIMING"							                                             >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+<B><FONT COLOR=008000>report_timing</FONT></B> <I><FONT COLOR=AA0000>-from</FONT></I> [all_inputs] <I><FONT COLOR=AA0000>-to</FONT></I> [all_outputs]			                       >> ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_timing.rep
+
+
+<B><FONT COLOR=008000>ungroup</FONT></B> <I><FONT COLOR=AA0000>-all</FONT></I> <I><FONT COLOR=AA0000>-flatten</FONT></I>
+<B><FONT COLOR=008000>report_reference</FONT></B> <I><FONT COLOR=AA0000>-nosplit</FONT></I>                                                      >  ./reports/<I><FONT COLOR=0000FF>${savename}</FONT></I>_reference.rep
+
+
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080># leave shel</FONT></I>
+<I><FONT COLOR=#808080># ---------------------------------------------------------------------------------------   </FONT></I>
+<B>if</B> { [<B>string</B> length [<B>exec</B> ps <I><FONT COLOR=AA0000>-fe</FONT></I> | grep "dc_shell<I><FONT COLOR=AA0000>-xg</FONT></I><I><FONT COLOR=AA0000>-t</FONT></I> <I><FONT COLOR=AA0000>-f</FONT></I>"]] != 0 } {
+  <B>quit</B>
+}
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

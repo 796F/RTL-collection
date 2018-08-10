@@ -1,0 +1,369 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/SHA256Main.vhdl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : SHA256Main</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : SHA256Main.vhdl</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Köppel Benedikt;Schnydrig Mathias  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2010-10-28</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-08</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: SHA 256 Main Part which calculates the SHA 256 sum for one</FONT></I>
+<I><FONT COLOR=#808080>-- message of 512 bits</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2010 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2010-10-28  1.0      sem10h7 Created</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.shapkg.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> ieee.numeric_std.all;
+
+<B>entity</B> SHA256Main <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#804040>MessageInxDI</FONT>       : <B>in</B>  expmess_arr;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>          : <B>in</B>  std_logic;
+    <FONT COLOR=#804040>HInxDI</FONT>             : <B>in</B>  h_arr;
+    <FONT COLOR=#32CD32>CLKxCI</FONT>             : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RSTxRBI</FONT>            : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>        : <B>out</B> std_logic;
+    <FONT COLOR=#804040>HOutxDO</FONT>            : <B>out</B> h_arr;
+    <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>    : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- EnablexSI</FONT></I>
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> : <B>out</B> std_logic   <I><FONT COLOR=#808080>-- bin am shaen</FONT></I>
+    );
+
+<B>end</B> SHA256Main;
+
+<B>architecture</B> behave <B>of</B> SHA256Main <B>is</B>
+
+  <I><FONT COLOR=#808080>-- for the message</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>ExpMessxDP</FONT> : expmess_arr;
+  <B>signal</B> <FONT COLOR=#804040>ExpMessxDN</FONT> : expmess_arr;
+
+  <I><FONT COLOR=#808080>-- for the FSM itself</FONT></I>
+  <B>type</B>   state <B>is</B> (Idle, Read, Hash, Output);
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT> : state;
+  <B>signal</B> <FONT COLOR=#804040>StatexDN</FONT> : state;
+
+  <I><FONT COLOR=#808080>-- for FSMs counter</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>KKCounterxDP</FONT> : std_logic_vector(5 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- count from 0 to 63 for KK</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>KKCounterxDN</FONT> : std_logic_vector(5 <B>downto</B> 0);
+
+  <I><FONT COLOR=#808080>-- to connect the MessageExpansion</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>WKK15xD</FONT>  : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKK2xD</FONT>   : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKK16xD</FONT>  : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKK7xD</FONT>   : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKKnewxD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+
+  <B>component</B> MessageExpansion
+    <B>port</B> (
+      <FONT COLOR=#804040>WKK15xDI</FONT> : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>WKK2xDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>WKK16xDI</FONT> : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>WKK7xDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>WKKxDO</FONT>   : <B>out</B> std_logic_vector(31 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+
+
+  <I><FONT COLOR=#808080>-- to connect the MainLoop</FONT></I>
+
+  <B>signal</B> <FONT COLOR=#804040>AtoHmainxD</FONT> : h_arr;
+  <B>signal</B> <FONT COLOR=#804040>AtoHnewxD</FONT>  : h_arr;
+  <B>signal</B> <FONT COLOR=#804040>WKKmainxD</FONT>  : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>KKKmainxD</FONT>  : std_logic_vector(31 <B>downto</B> 0);
+
+  <B>component</B> MainLoop
+    <B>port</B> (
+      <FONT COLOR=#804040>KKKxDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>WKKxDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+      <FONT COLOR=#804040>AtoHxDI</FONT> : <B>in</B>  h_arr;
+      <FONT COLOR=#804040>AtoHxDO</FONT> : <B>out</B> h_arr
+      );
+  <B>end</B> <B>component</B>;
+
+
+
+  <I><FONT COLOR=#808080>-- to connect StoreAtoH</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>AtoHxDN</FONT> : h_arr;
+  <B>signal</B> <FONT COLOR=#804040>AtoHxDP</FONT> : h_arr;
+
+  <I><FONT COLOR=#808080>-- Signals in Message Expansion</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>S0xD</FONT>      : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>S1xD</FONT>      : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKKsum1xD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>WKKsum2xD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+
+
+
+<B>begin</B>
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Message Expansion</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  
+  <FONT COLOR=#804040>S0xD</FONT> <= ("000"&<FONT COLOR=#804040>WKK15xD</FONT>(31 <B>downto</B> 3)) <B>xor</B> (<FONT COLOR=#804040>WKK15xD</FONT>(17 <B>downto</B> 0)&<FONT COLOR=#804040>WKK15xD</FONT>(31 <B>downto</B> 18)) <B>xor</B> (<FONT COLOR=#804040>WKK15xD</FONT>(6 <B>downto</B> 0)&<FONT COLOR=#804040>WKK15xD</FONT>(31 <B>downto</B> 7));
+
+  <FONT COLOR=#804040>S1xD</FONT> <= ("0000000000"&<FONT COLOR=#804040>WKK2xD</FONT>(31 <B>downto</B> 10)) <B>xor</B> (<FONT COLOR=#804040>WKK2xD</FONT>(18 <B>downto</B> 0)&<FONT COLOR=#804040>WKK2xD</FONT>(31 <B>downto</B> 19)) <B>xor</B> (<FONT COLOR=#804040>WKK2xD</FONT>(16 <B>downto</B> 0)&<FONT COLOR=#804040>WKK2xD</FONT>(31 <B>downto</B> 17));
+
+  <FONT COLOR=#804040>WKKsum1xD</FONT> <= <FONT COLOR=#804040>S0xD</FONT> + <FONT COLOR=#804040>S1xD</FONT>;
+  <FONT COLOR=#804040>WKKsum2xD</FONT> <= <FONT COLOR=#804040>WKK16xD</FONT> + <FONT COLOR=#804040>WKK7xD</FONT>;
+
+  <FONT COLOR=#804040>WKKnewxD</FONT> <= <FONT COLOR=#804040>WKKsum1xD</FONT> + <FONT COLOR=#804040>WKKsum2xD</FONT>;
+
+
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Main Loop</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>-- instance for MainLoop</FONT></I>
+  i_MainLoop : MainLoop
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>KKKxDI</FONT>  => <FONT COLOR=#804040>KKKmainxD</FONT>,
+      <FONT COLOR=#804040>WKKxDI</FONT>  => <FONT COLOR=#804040>WKKmainxD</FONT>,
+      <FONT COLOR=#804040>AtoHxDI</FONT> => <FONT COLOR=#804040>AtoHmainxD</FONT>,
+      <FONT COLOR=#804040>AtoHxDO</FONT> => <FONT COLOR=#804040>AtoHnewxD</FONT>
+      );
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- StreAtoH</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  
+  <FONT COLOR=#0000C0>p_mem_AtoH</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>AtoHxDP</FONT> <= (<B>others</B> => (<B>others</B> => '0'));
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>AtoHxDP</FONT> <= <FONT COLOR=#804040>AtoHxDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem_AtoH</FONT>;
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- update H</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <FONT COLOR=#804040>HOutxDO</FONT>(0) <= <FONT COLOR=#804040>AtoHxDP</FONT>(0) + <FONT COLOR=#804040>HInxDI</FONT>(0);
+  <FONT COLOR=#804040>HOutxDO</FONT>(1) <= <FONT COLOR=#804040>AtoHxDP</FONT>(1) + <FONT COLOR=#804040>HInxDI</FONT>(1);
+  <FONT COLOR=#804040>HOutxDO</FONT>(2) <= <FONT COLOR=#804040>AtoHxDP</FONT>(2) + <FONT COLOR=#804040>HInxDI</FONT>(2);
+  <FONT COLOR=#804040>HOutxDO</FONT>(3) <= <FONT COLOR=#804040>AtoHxDP</FONT>(3) + <FONT COLOR=#804040>HInxDI</FONT>(3);
+  <FONT COLOR=#804040>HOutxDO</FONT>(4) <= <FONT COLOR=#804040>AtoHxDP</FONT>(4) + <FONT COLOR=#804040>HInxDI</FONT>(4);
+  <FONT COLOR=#804040>HOutxDO</FONT>(5) <= <FONT COLOR=#804040>AtoHxDP</FONT>(5) + <FONT COLOR=#804040>HInxDI</FONT>(5);
+  <FONT COLOR=#804040>HOutxDO</FONT>(6) <= <FONT COLOR=#804040>AtoHxDP</FONT>(6) + <FONT COLOR=#804040>HInxDI</FONT>(6);
+  <FONT COLOR=#804040>HOutxDO</FONT>(7) <= <FONT COLOR=#804040>AtoHxDP</FONT>(7) + <FONT COLOR=#804040>HInxDI</FONT>(7);
+
+
+
+
+  <I><FONT COLOR=#808080>-- purpose: Store the expanded message</FONT></I>
+  <FONT COLOR=#0000C0>p_mess_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>ExpMessxDP</FONT> <= (<B>others</B> => (<B>others</B> => '0'));
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>ExpMessxDP</FONT> <= <FONT COLOR=#804040>ExpMessxDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mess_mem</FONT>;
+
+
+  <I><FONT COLOR=#808080>-- purpose: update KK counter</FONT></I>
+  <FONT COLOR=#0000C0>p_kkcount_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_kkcount_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>KKCounterxDP</FONT> <= (<B>others</B> => '0');
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>KKCounterxDP</FONT> <= <FONT COLOR=#804040>KKCounterxDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_kkcount_mem</FONT>;
+
+
+
+  <FONT COLOR=#0000C0>p_update_state_mem_test</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_update_state_mem_test</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= Idle;
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= <FONT COLOR=#804040>StatexDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_update_state_mem_test</FONT>;
+
+
+  <I><FONT COLOR=#808080>-- purpose: calculate next FSM state</FONT></I>
+  <FONT COLOR=#0000C0>p_calculate_state_memless</FONT> : <B>process</B> (<FONT COLOR=#804040>AtoHnewxD</FONT>, <FONT COLOR=#804040>AtoHxDP</FONT>, <FONT COLOR=#804040>ExpMessxDP</FONT>, <FONT COLOR=#804040>HInxDI</FONT>,
+                                       <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#804040>KKCounterxDP</FONT>, <FONT COLOR=#804040>MessageInxDI</FONT>,
+                                       <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>, <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>WKKnewxD</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_calculate_state_memless</FONT></I>
+
+    <I><FONT COLOR=#808080>-- default values</FONT></I>
+    <FONT COLOR=#804040>ExpMessxDN</FONT>     <= <FONT COLOR=#804040>ExpMessxDP</FONT>;
+    <FONT COLOR=#804040>StatexDN</FONT>       <= <FONT COLOR=#804040>StatexDP</FONT>;
+    <FONT COLOR=#804040>KKCounterxDN</FONT>   <= <FONT COLOR=#804040>KKCounterxDP</FONT>;
+    <FONT COLOR=#804040>WKK15xD</FONT>        <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>WKK2xD</FONT>         <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>WKK16xD</FONT>        <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>WKK7xD</FONT>         <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>WKKmainxD</FONT>      <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>KKKmainxD</FONT>      <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>AtoHxDN</FONT>        <= <FONT COLOR=#804040>AtoHxDP</FONT>;
+    <FONT COLOR=#804040>AtoHmainxD</FONT>     <= <FONT COLOR=#804040>AtoHxDP</FONT>;
+    <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>    <= '0';
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+
+    <I><FONT COLOR=#808080>--</FONT></I>
+    <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> <= '0';
+
+    <B>case</B> <FONT COLOR=#804040>StatexDP</FONT> <B>is</B>
+      <B>when</B> Idle =>
+
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>ExpMessxDN</FONT> <= <FONT COLOR=#804040>MessageInxDI</FONT>;
+        <B>end</B> <B>if</B>;
+
+
+
+        <I><FONT COLOR=#808080>-- we are waiting for the message to come</FONT></I>
+        <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> <= '0';
+
+        <I><FONT COLOR=#808080>-- if input message is ready, go to Read</FONT></I>
+        <I><FONT COLOR=#808080>-- else, wait in Idle mode</FONT></I>
+        <B>if</B> <FONT COLOR=#1E90FF>MessageReadyxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Read;
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Idle;
+        <B>end</B> <B>if</B>;
+        
+      <B>when</B> Read =>
+
+        <I><FONT COLOR=#808080>-- we are reading the message (i.e. not yet received)</FONT></I>
+        <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> <= '0';
+
+        <I><FONT COLOR=#808080>-- read in the message from MessageInxDI into the FF</FONT></I>
+        <I><FONT COLOR=#808080>-- reset the KK counter</FONT></I>
+        <I><FONT COLOR=#808080>-- go into hash state</FONT></I>
+
+
+<I><FONT COLOR=#808080>--        ExpMessxDN   MessageInxDI;</FONT></I>
+
+
+        <FONT COLOR=#804040>KKCounterxDN</FONT> <= (<B>others</B> => '0');
+        <FONT COLOR=#804040>StatexDN</FONT>     <= Hash;
+
+        <I><FONT COLOR=#808080>-- read in the start values</FONT></I>
+        <FONT COLOR=#804040>AtoHxDN</FONT> <= <FONT COLOR=#804040>HInxDI</FONT>;
+
+      <B>when</B> Hash =>
+
+        <I><FONT COLOR=#808080>-- the input message was received</FONT></I>
+        <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> <= '1';
+
+        <I><FONT COLOR=#808080>-- for the first 16 words, we don't need the expansion and do</FONT></I>
+        <I><FONT COLOR=#808080>-- only HashMain</FONT></I>
+        <I><FONT COLOR=#808080>-- for the 16th word, we already need to start with the expansion,</FONT></I>
+        <I><FONT COLOR=#808080>-- because the expanded word will be needed in the next increment</FONT></I>
+        <B>if</B> <FONT COLOR=#804040>KKCounterxDP</FONT> < 15 <B>then</B>
+
+          <I><FONT COLOR=#808080>-- no expansion: ExpMessage remains constant</FONT></I>
+          <FONT COLOR=#804040>ExpMessxDN</FONT> <= <FONT COLOR=#804040>ExpMessxDP</FONT>;
+
+          <I><FONT COLOR=#808080>-- from 16 to 64 we need to expand the next message</FONT></I>
+        <B>else</B>
+
+          <I><FONT COLOR=#808080>-- bring WKK15, WKK2, WKK16, WKK7 to MessageExpansion and store</FONT></I>
+          <I><FONT COLOR=#808080>-- the output of the message expansion into the FF</FONT></I>
+          <I><FONT COLOR=#808080>-- The FF has only 16 words, we can wrap-around it and overwrite the</FONT></I>
+          <I><FONT COLOR=#808080>-- old words (they're unused)</FONT></I>
+
+          <I><FONT COLOR=#808080>-- do the wrap-around with the mod 16 calculation</FONT></I>
+          <FONT COLOR=#804040>WKK15xD</FONT> <= <FONT COLOR=#804040>ExpMessxDP</FONT>((to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>))-15+1) mod 16);
+          <FONT COLOR=#804040>WKK2xD</FONT>  <= <FONT COLOR=#804040>ExpMessxDP</FONT>((to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>))-2+1) mod 16);
+          <FONT COLOR=#804040>WKK16xD</FONT> <= <FONT COLOR=#804040>ExpMessxDP</FONT>((to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>))-16+1) mod 16);
+          <FONT COLOR=#804040>WKK7xD</FONT>  <= <FONT COLOR=#804040>ExpMessxDP</FONT>((to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>))-7+1) mod 16);
+          <I><FONT COLOR=#808080>--WKKnewTempxDN WKKnewxD;    -- in round kk, store the expanded</FONT></I>
+          <I><FONT COLOR=#808080>-- message word, in kk+1 it will go to</FONT></I>
+          <I><FONT COLOR=#808080>-- the expanded message, so that it is</FONT></I>
+          <I><FONT COLOR=#808080>-- valid in round kk+2</FONT></I>
+
+          <I><FONT COLOR=#808080>--ExpMessxDN((to_integer(unsigned(KKCounterxDP))+1) mod 16) WKKnewTempxDP;</FONT></I>
+          <FONT COLOR=#804040>ExpMessxDN</FONT>((to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>))+1) mod 16) <= <FONT COLOR=#804040>WKKnewxD</FONT>;
+
+
+        <B>end</B> <B>if</B>;
+
+
+        <I><FONT COLOR=#808080>-- in all cases, we do the MainLoop</FONT></I>
+        <FONT COLOR=#804040>WKKmainxD</FONT>  <= <FONT COLOR=#804040>ExpMessxDP</FONT>(to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>)) mod 16);
+        <FONT COLOR=#804040>KKKmainxD</FONT>  <= K_INITIAL(to_integer(unsigned(<FONT COLOR=#804040>KKCounterxDP</FONT>)));
+        <I><FONT COLOR=#808080>-- in the first round, we read AtoH from the inputs HInxDI</FONT></I>
+        <I><FONT COLOR=#808080>-- all following rounds, we need to continue with the previously</FONT></I>
+        <I><FONT COLOR=#808080>-- calculated values</FONT></I>
+<I><FONT COLOR=#808080>--        if KKCounterxDP = 0 then -- init HInx when reading the message</FONT></I>
+<I><FONT COLOR=#808080>--          AtoHmainxD HInxDI;</FONT></I>
+<I><FONT COLOR=#808080>--        else</FONT></I>
+<I><FONT COLOR=#808080>--          AtoHmainxD AtoHxDP;</FONT></I>
+<I><FONT COLOR=#808080>--        end if;</FONT></I>
+        <FONT COLOR=#804040>AtoHmainxD</FONT> <= <FONT COLOR=#804040>AtoHxDP</FONT>;
+
+
+        <I><FONT COLOR=#808080>-- move the new A..H values to StoreAtoH</FONT></I>
+        <FONT COLOR=#804040>AtoHxDN</FONT> <= <FONT COLOR=#804040>AtoHnewxD</FONT>;
+
+        <I><FONT COLOR=#808080>-- after doing the main loop, we go back to Hash for the first 63 times</FONT></I>
+        <I><FONT COLOR=#808080>-- when the last one is done, we go to Output</FONT></I>
+
+
+        <B>if</B> <FONT COLOR=#804040>KKCounterxDP</FONT> = 63 <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Output;
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Hash;
+        <B>end</B> <B>if</B>;
+
+        <I><FONT COLOR=#808080>-- increase the KK counter</FONT></I>
+        <FONT COLOR=#804040>KKCounterxDN</FONT> <= <FONT COLOR=#804040>KKCounterxDP</FONT> + 1;
+
+        
+        
+      <B>when</B> Output =>
+        <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+        <I><FONT COLOR=#808080>-- calculate the actual output</FONT></I>
+        <I><FONT COLOR=#808080>-- A..H and Harr are connected to UpdateH and get then to output pins</FONT></I>
+        <B>if</B> <FONT COLOR=#1E90FF>MessageReadyxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Read;
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Idle;
+        <B>end</B> <B>if</B>;
+        <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT> <= '1';
+        
+        
+      <B>when</B> <B>others</B> => null;
+    <B>end</B> <B>case</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_calculate_state_memless</FONT>;
+  
+  
+<B>end</B> behave;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

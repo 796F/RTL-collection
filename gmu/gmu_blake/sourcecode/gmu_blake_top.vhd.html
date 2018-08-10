@@ -1,0 +1,77 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/gmu_blake_top.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<I><FONT COLOR=#808080>-- Possible generic(s) values:</FONT></I>
+<I><FONT COLOR=#808080>-- 		adder_type = {SCCA_BASED, CSA_BASED}</FONT></I>
+<I><FONT COLOR=#808080>--</FONT></I>
+<I><FONT COLOR=#808080>-- adder_type describes the type of adders being used in the critical paths. They are :</FONT></I>
+<I><FONT COLOR=#808080>--      SCCA_BASED      => Standard Carry Chain Addition in FPGA. This is a simple '+' sign.</FONT></I>
+<I><FONT COLOR=#808080>--      CSA_BASED       => Carry Save Adder.</FONT></I>
+
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_blake_package.all;
+
+<B>entity</B> gmu_blake_top <B>is</B>
+        <B>generic</B> (
+                adder_type : integer := SCCA_BASED
+        ); 
+        <B>port</B> (
+                <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Rising Edge Triggered Clock</FONT></I>
+                <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Active-low, asynchronous Reset Signal</FONT></I>
+                <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+                <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+                <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+                <FONT COLOR=#1E90FF>InEnxSI</FONT>        : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Input Enable</FONT></I>
+                <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Final Block</FONT></I>
+                <FONT COLOR=#804040>DataxDI</FONT>        : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- Input Data</FONT></I>
+                <FONT COLOR=#804040>MsgLenxDI</FONT>      : <B>in</B>  std_logic_vector(63 <B>downto</B> 0);
+                <FONT COLOR=#1E90FF>OutEnxSO</FONT>       : <B>out</B> std_logic;  <I><FONT COLOR=#808080>-- Output Enable</FONT></I>
+                <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;  <I><FONT COLOR=#808080>-- Penultimate Cycle</FONT></I>
+                <FONT COLOR=#804040>DataxDO</FONT>        : <B>out</B> std_logic_vector(255 <B>downto</B> 0)  <I><FONT COLOR=#808080>-- Output Data</FONT></I>
+        );         
+<B>end</B> gmu_blake_top;
+
+
+<B>architecture</B> structure <B>of</B> gmu_blake_top <B>is</B>   
+	<B>constant</B> h : integer := 256;
+	<B>constant</B> b : integer := get_b( h );
+	<B>constant</B> iw : integer := get_iw( h );
+	<B>constant</B> version : integer := SHA3_ROUND3;
+	
+	<B>signal</B> er, em, eh, sf, lm  : std_logic;
+	<B>signal</B> round : std_logic_vector(4 <B>downto</B> 0); 
+<B>begin</B>			   
+	control_gen : <B>entity</B> work.gmu_blake_control(beh) 
+		<B>port</B> <B>map</B> (
+		clk => <FONT COLOR=#32CD32>ClkxCI</FONT>, rst => <FONT COLOR=#FF6347>RstxRBI</FONT>, 
+		<FONT COLOR=#1E90FF>InWrEnxSI</FONT> => <FONT COLOR=#1E90FF>InEnxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT> => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSO</FONT> => <FONT COLOR=#1E90FF>OutEnxSO</FONT>, <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,
+		round => round, er => er, em => em, eh => eh, sf => sf, lm => lm 
+	);
+	
+	datapath_gen : <B>entity</B> work.gmu_blake_datapath(struct) 	
+		<B>generic</B> <B>map</B> ( b => b, iw => iw, h => h, ADDER_TYPE => adder_type )
+		<B>port</B> <B>map</B> (
+		clk => <FONT COLOR=#32CD32>ClkxCI</FONT>, rst => <FONT COLOR=#FF6347>RstxRBI</FONT>, din => <FONT COLOR=#804040>DataxDI</FONT>, dout => <FONT COLOR=#804040>DataxDO</FONT>, t => <FONT COLOR=#804040>MsgLenxDI</FONT>,
+		round => round, er => er, em => em, eh => eh, sf => sf, lm => lm 
+	);
+<B>end</B> structure;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

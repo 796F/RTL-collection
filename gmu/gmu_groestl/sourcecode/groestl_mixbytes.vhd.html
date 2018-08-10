@@ -1,0 +1,98 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/groestl_mixbytes.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+ <I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> work.sha3_pkg.all;	 
+<B>use</B> work.groestl_pkg.all;	
+
+<I><FONT COLOR=#808080>-- Groestl MixBytes  implemented as combinational function</FONT></I>
+<I><FONT COLOR=#808080>-- possible generics values: hs = {GROESTL_DATA_SIZE_SMALL, GROESTL_DATA_SIZE_BIG} </FONT></I>
+<I><FONT COLOR=#808080>-- they are corresponding to 256 and 512 versions respectively </FONT></I>
+
+<B>entity</B> groestl_mixbytes <B>is</B>
+<B>generic</B> (n	:integer := GROESTL_DATA_SIZE_SMALL);
+<B>port</B>( 
+	input 		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+    output 		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> groestl_mixbytes;
+  
+<B>architecture</B> groestl_mixbytes <B>of</B> groestl_mixbytes <B>is</B>
+<B>signal</B> mulx2	:std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> mulx3	:std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> mulx4	:std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> mulx5	:std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> mulx7	:std_logic_vector(n-1 <B>downto</B> 0);
+	
+<B>begin</B>
+
+<I><FONT COLOR=#808080>-- multiplication by x02 in GF(2^8)</FONT></I>
+<FONT COLOR=#0000C0>m2a_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE -1 <B>generate</B> 
+m2a	:<B>entity</B> work.aes_mulx02(rtl)   
+		 <B>port</B> <B>map</B> (input=>input((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)), 
+			  output=>mulx2((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)));
+<B>end</B> <B>generate</B>;
+
+<I><FONT COLOR=#808080>-- multiplication by x03 in GF(2^8)</FONT></I>
+<FONT COLOR=#0000C0>m3a_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE -1 <B>generate</B> 
+m3a	:<B>entity</B> work.aes_mulx03(rtl) 
+   		 <B>port</B> <B>map</B> (input=>input((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)), 
+			  output=>mulx3((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)));
+<B>end</B> <B>generate</B>;
+
+<I><FONT COLOR=#808080>-- multiplication by x04 in GF(2^8)</FONT></I>
+<FONT COLOR=#0000C0>m4_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE -1 <B>generate</B> 
+m4	:<B>entity</B> work.aes_mulx04(rtl) 
+   		 <B>port</B> <B>map</B> (input=>input((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)), 
+			  output=>mulx4((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)));
+<B>end</B> <B>generate</B>;
+
+<I><FONT COLOR=#808080>-- multiplication by x05 in GF(2^8)</FONT></I>
+<FONT COLOR=#0000C0>m5a_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE -1 <B>generate</B> 
+m5a	:<B>entity</B> work.aes_mulx05(rtl) 
+   		 <B>port</B> <B>map</B> (input=>input((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)), 
+			  output=>mulx5((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)));
+<B>end</B> <B>generate</B>;
+
+<I><FONT COLOR=#808080>-- multiplication by x07 in GF(2^8)</FONT></I>
+<FONT COLOR=#0000C0>m7_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/AES_SBOX_SIZE -1 <B>generate</B> 
+m7	:<B>entity</B> work.aes_mulx07(rtl) 
+   		 <B>port</B> <B>map</B> (input=>input((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)), 
+			  output=>mulx7((i+1)*AES_SBOX_SIZE-1 <B>downto</B> (i*AES_SBOX_SIZE)));
+<B>end</B> <B>generate</B>;
+
+<I><FONT COLOR=#808080>-- network of xors </FONT></I>
+<FONT COLOR=#0000C0>out_ls_gen</FONT>: <B>for</B> i <B>in</B> 0 <B>to</B> n/64-1 <B>generate</B>
+	output(64*i+63 <B>downto</B> 64*i+56) 	<= mulx2(64*i+63 <B>downto</B> 64*i+56) <B>xor</B> mulx2(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx3(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx4(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx5(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx3(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx5(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx7(64*i+7 <B>downto</B> 64*i);
+	output(64*i+55 <B>downto</B> 64*i+48) 	<= mulx7(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx2(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx2(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx3(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx4(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx5(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx3(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx5(64*i+7 <B>downto</B> 64*i);
+	output(64*i+47 <B>downto</B> 64*i+40) 	<= mulx5(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx7(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx2(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx2(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx3(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx4(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx5(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx3(64*i+7 <B>downto</B> 64*i);
+	output(64*i+39 <B>downto</B> 64*i+32) 	<= mulx3(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx5(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx7(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx2(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx2(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx3(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx4(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx5(64*i+7 <B>downto</B> 64*i);
+	output(64*i+31 <B>downto</B> 64*i+24) 	<= mulx5(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx3(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx5(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx7(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx2(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx2(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx3(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx4(64*i+7 <B>downto</B> 64*i);
+	output(64*i+23 <B>downto</B> 64*i+16) 	<= mulx4(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx5(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx3(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx5(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx7(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx2(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx2(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx3(64*i+7 <B>downto</B> 64*i);
+	output(64*i+15 <B>downto</B> 64*i+8) 	<= mulx3(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx4(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx5(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx3(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx5(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx7(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx2(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx2(64*i+7 <B>downto</B> 64*i);
+	output(64*i+7 <B>downto</B> 64*i+0) 	<= mulx2(64*i+63 <B>downto</B> 64*i+56)  <B>xor</B> mulx3(64*i+55 <B>downto</B> 64*i+48) <B>xor</B> mulx4(64*i+47 <B>downto</B> 64*i+40) <B>xor</B> mulx5(64*i+39 <B>downto</B> 64*i+32) <B>xor</B> mulx3(64*i+31 <B>downto</B> 64*i+24) <B>xor</B> mulx5(64*i+23 <B>downto</B> 64*i+16)  <B>xor</B> mulx7(64*i+15 <B>downto</B> 64*i+8)  <B>xor</B> mulx2(64*i+7 <B>downto</B> 64*i);
+
+<B>end</B> <B>generate</B>;
+
+
+
+
+<B>end</B> groestl_mixbytes; 
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

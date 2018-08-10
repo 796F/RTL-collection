@@ -1,0 +1,205 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/MainLoop.vhdl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : MainLoop</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : MainLoop.vhdl</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Köppel Benedikt;Schnydrig Mathias  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2010-10-28</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-29</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: SHA 256 Main Loop</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2010 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2010-10-28  1.0      sem10h7 Created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-29  1.1      kgf     changed the entity name for CSA</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.shapkg.all;
+
+<B>entity</B> MainLoop <B>is</B>
+  
+  <B>port</B> (
+    <FONT COLOR=#804040>KKKxDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+    <FONT COLOR=#804040>WKKxDI</FONT>  : <B>in</B>  std_logic_vector(31 <B>downto</B> 0);
+    <FONT COLOR=#804040>AtoHxDI</FONT> : <B>in</B>  h_arr;
+    <FONT COLOR=#804040>AtoHxDO</FONT> : <B>out</B> h_arr
+    );
+
+<B>end</B> MainLoop;
+
+<B>architecture</B> behave <B>of</B> MainLoop <B>is</B>
+
+  <B>signal</B> <FONT COLOR=#804040>S0xD</FONT>     : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>MajxD</FONT>    : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CHxD</FONT>     : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>S1xD</FONT>     : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>T1sum2xD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>T2xD</FONT>     : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>T1sum1xD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>T1sum3xD</FONT> : std_logic_vector(31 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>T1xD</FONT>     : std_logic_vector(31 <B>downto</B> 0);
+
+  <I><FONT COLOR=#808080>-- carry save adders</FONT></I>
+<I><FONT COLOR=#808080>--  signal SCAxD  : std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal PSAxD  : std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal SumAxD : std_logic_vector(32 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal SCExD  : std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal PSExD  : std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal SumExD : std_logic_vector(32 downto 0);</FONT></I>
+
+  <B>constant</B> WIDTH : integer := 32;       <I><FONT COLOR=#808080>-- CSA width</FONT></I>
+  
+  <B>component</B> ethz_csa
+    <B>generic</B> (
+      WIDTH : integer);
+    <B>port</B> (
+      <FONT COLOR=#804040>XxDI</FONT> : <B>in</B>  std_logic_vector(WIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>YxDI</FONT> : <B>in</B>  std_logic_vector(WIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>ZxDI</FONT> : <B>in</B>  std_logic_vector(WIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>CxDO</FONT> : <B>out</B> std_logic_vector(WIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>SxDO</FONT> : <B>out</B> std_logic_vector(WIDTH-1 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+  
+
+    <I><FONT COLOR=#808080>-- temp signals</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>CSAC1xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS1xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAC2xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS2xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAC3xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS3xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAC4xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS4xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAC5xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS5xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAC6xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>CSAS6xD</FONT> : std_logic_vector(WIDTH-1 <B>downto</B> 0);
+
+  
+  
+<I><FONT COLOR=#808080>--  component Add32Mod</FONT></I>
+<I><FONT COLOR=#808080>--    port (</FONT></I>
+<I><FONT COLOR=#808080>--      a : in  std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--      b : in  std_logic_vector(31 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--      s : out std_logic_vector(31 downto 0));</FONT></I>
+<I><FONT COLOR=#808080>--  end component;</FONT></I>
+
+<B>begin</B>
+
+
+
+
+
+  CSA_1: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>KKKxDI</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>WKKxDI</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>AtoHxDI</FONT>(7),
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC1xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS1xD</FONT>);
+  CSA_2: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>CSAC1xD</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>CSAS1xD</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>S1xD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC2xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS2xD</FONT>);
+  CSA_3: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>CSAC2xD</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>CSAS2xD</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>CHxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC3xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS3xD</FONT>);
+  <I><FONT COLOR=#808080>-- CSA.3 is now KKK + WKK + H + S1 + CH</FONT></I>
+
+  CSA_4: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>CSAC3xD</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>CSAS3xD</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>AtoHxDI</FONT>(3),
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC4xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS4xD</FONT>);
+  <I><FONT COLOR=#808080>-- CSA.4 is now CSA.3 + D</FONT></I>
+  <FONT COLOR=#804040>AtoHxDO</FONT>(4) <= <FONT COLOR=#804040>CSAC4xD</FONT> + <FONT COLOR=#804040>CSAS4xD</FONT>;
+
+  CSA_5: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>CSAC3xD</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>CSAS3xD</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>S0xD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC5xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS5xD</FONT>);
+
+  CSA_6: ethz_csa
+    <B>generic</B> <B>map</B> (
+      WIDTH => WIDTH)
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>XxDI</FONT> => <FONT COLOR=#804040>CSAC5xD</FONT>,
+      <FONT COLOR=#804040>YxDI</FONT> => <FONT COLOR=#804040>CSAS5xD</FONT>,
+      <FONT COLOR=#804040>ZxDI</FONT> => <FONT COLOR=#804040>MajxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>CSAC6xD</FONT>,
+      <FONT COLOR=#804040>SxDO</FONT> => <FONT COLOR=#804040>CSAS6xD</FONT>);
+  
+  <FONT COLOR=#804040>AtoHxDO</FONT>(0) <= <FONT COLOR=#804040>CSAC6xD</FONT> + <FONT COLOR=#804040>CSAS6xD</FONT>;
+  
+
+  
+
+
+
+  
+  <FONT COLOR=#804040>S0xD</FONT>  <= (<FONT COLOR=#804040>AtoHxDI</FONT>(0)(1 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(0)(31 <B>downto</B> 2)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(0)(12 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(0)(31 <B>downto</B> 13)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(0)(21 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(0)(31 <B>downto</B> 22));
+  <FONT COLOR=#804040>MajxD</FONT> <= (<FONT COLOR=#804040>AtoHxDI</FONT>(0) <B>and</B> <FONT COLOR=#804040>AtoHxDI</FONT>(1)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(0) <B>and</B> <FONT COLOR=#804040>AtoHxDI</FONT>(2)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(1) <B>and</B> <FONT COLOR=#804040>AtoHxDI</FONT>(2));
+  <FONT COLOR=#804040>CHxD</FONT>  <= (<FONT COLOR=#804040>AtoHxDI</FONT>(4) <B>and</B> <FONT COLOR=#804040>AtoHxDI</FONT>(5)) <B>xor</B> ((<B>not</B> <FONT COLOR=#804040>AtoHxDI</FONT>(4)) <B>and</B> <FONT COLOR=#804040>AtoHxDI</FONT>(6));
+
+  <FONT COLOR=#804040>S1xD</FONT> <= (<FONT COLOR=#804040>AtoHxDI</FONT>(4)(5 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(4)(31 <B>downto</B> 6)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(4)(10 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(4)(31 <B>downto</B> 11)) <B>xor</B> (<FONT COLOR=#804040>AtoHxDI</FONT>(4)(24 <B>downto</B> 0)&<FONT COLOR=#804040>AtoHxDI</FONT>(4)(31 <B>downto</B> 25));
+
+
+
+
+
+
+  <I><FONT COLOR=#808080>-- the easy ones</FONT></I>
+  <FONT COLOR=#804040>AtoHxDO</FONT>(1) <= <FONT COLOR=#804040>AtoHxDI</FONT>(0);
+  <FONT COLOR=#804040>AtoHxDO</FONT>(2) <= <FONT COLOR=#804040>AtoHxDI</FONT>(1);
+  <FONT COLOR=#804040>AtoHxDO</FONT>(3) <= <FONT COLOR=#804040>AtoHxDI</FONT>(2);
+  <FONT COLOR=#804040>AtoHxDO</FONT>(5) <= <FONT COLOR=#804040>AtoHxDI</FONT>(4);
+  <FONT COLOR=#804040>AtoHxDO</FONT>(6) <= <FONT COLOR=#804040>AtoHxDI</FONT>(5);
+  <FONT COLOR=#804040>AtoHxDO</FONT>(7) <= <FONT COLOR=#804040>AtoHxDI</FONT>(6);
+
+<B>end</B> behave;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

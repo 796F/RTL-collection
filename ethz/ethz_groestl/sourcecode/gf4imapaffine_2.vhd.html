@@ -1,0 +1,40 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/gf4imapaffine_2.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+
+<B>entity</B> gf4imapaffine_2 <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>AhxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+    <FONT COLOR=#804040>AlxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+    <FONT COLOR=#804040>AxDO</FONT>  : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+
+<B>end</B> gf4imapaffine_2;
+
+<B>architecture</B> rtl <B>of</B> gf4imapaffine_2 <B>is</B>
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  <FONT COLOR=#804040>AxDO</FONT>(0) <= <FONT COLOR=#804040>AlxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <B>not</B>(<FONT COLOR=#804040>AhxDI</FONT>(3)) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(2);
+  <FONT COLOR=#804040>AxDO</FONT>(1) <= <B>not</B>(<FONT COLOR=#804040>AhxDI</FONT>(0)) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(2) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(3);
+  <FONT COLOR=#804040>AxDO</FONT>(2) <= <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(3);
+  <FONT COLOR=#804040>AxDO</FONT>(3) <= <FONT COLOR=#804040>AlxDI</FONT>(2) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(2);
+  <FONT COLOR=#804040>AxDO</FONT>(4) <= <FONT COLOR=#804040>AlxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(2);
+  <FONT COLOR=#804040>AxDO</FONT>(5) <= <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <B>not</B>(<FONT COLOR=#804040>AhxDI</FONT>(1)) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(2) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(2) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(3);
+  <FONT COLOR=#804040>AxDO</FONT>(6) <= <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <B>not</B>(<FONT COLOR=#804040>AhxDI</FONT>(2)) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3);
+  <FONT COLOR=#804040>AxDO</FONT>(7) <= <FONT COLOR=#804040>AhxDI</FONT>(2) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AhxDI</FONT>(3) <B>xor</B> <FONT COLOR=#804040>AlxDI</FONT>(2);
+  
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

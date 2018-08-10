@@ -1,0 +1,36 @@
+<HTML>
+<TITLE>
+ gmu_sha2/synopsys/scripts/design_settings.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># -- set values for timing constraints</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.0 1.2 1.4 1.6 2.5 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.2500 1.2987 1.3514 1.4599 1.5152 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.0 1.3 1.4 1.5 2.0 2.5}</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.3 1.4 }</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>CLOCKLIST</FONT></I> { 1.6 }
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.0 1.2 1.4 1.8 2.0 2.5 1.6 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 1.8 }</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>IN</FONT></I>  0.0
+<B><B>set</B> </B><I><FONT COLOR=0000FF>OUT</FONT></I> 0.0
+
+<I><FONT COLOR=#808080># -- assign the target library corner</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>corner</FONT></I>         wc
+
+<I><FONT COLOR=#808080># -- set for driving and load</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LIB</FONT></I>       <I><FONT COLOR=0000FF>$driverlibrary</FONT></I>("<I><FONT COLOR=0000FF>$corner</FONT></I>")
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_CELL</FONT></I> BUFM4R
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_PIN</FONT></I>  Z
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_CELL</FONT></I> BUFM4R
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_PIN</FONT></I>  A
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

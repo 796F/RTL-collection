@@ -1,0 +1,157 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/groestl_pkg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all; 
+<B>use</B> work.sha3_pkg.all;
+
+<B>package</B> groestl_pkg <B>is</B>
+<I><FONT COLOR=#808080>-- data capacity for different versions of Groestl</FONT></I>
+<B>constant</B> GROESTL_DATA_SIZE_BIG				:integer:=1024;
+<B>constant</B> GROESTL_DATA_SIZE_SMALL			:integer:=512;
+
+<I><FONT COLOR=#808080>-- names of different architectures </FONT></I>
+<B>constant</B> GROESTL_ARCH_PQ_Fx8				:integer:=1;
+<B>constant</B> GROESTL_ARCH_PQ_Fx4				:integer:=2;
+<B>constant</B> GROESTL_ARCH_PQ_Fx2				:integer:=3;
+<B>constant</B> GROESTL_ARCH_PQ_QPPL				:integer:=4;
+<B>constant</B> GROESTL_ARCH_PQ_U2					:integer:=5;
+<B>constant</B> GROESTL_ARCH_PQ_UX					:integer:=6; 
+
+<B>constant</B> GROESTL_ARCH_PARALLEL_VER1			:integer:=7;
+<B>constant</B> GROESTL_ARCH_PARALLEL_VER2			:integer:=8;
+
+
+<I><FONT COLOR=#808080>-- initialivation vectors for different versions of Groestl</FONT></I>
+<B>constant</B> GROESTL_INIT_VALUE_224			:std_logic_vector(GROESTL_DATA_SIZE_SMALL-1 <B>downto</B> 0) := x"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E0";
+<B>constant</B> GROESTL_INIT_VALUE_256			:std_logic_vector(GROESTL_DATA_SIZE_SMALL-1 <B>downto</B> 0) := x"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100";
+<B>constant</B> GROESTL_INIT_VALUE_384			:std_logic_vector(GROESTL_DATA_SIZE_BIG-1 <B>downto</B> 0) := x"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000180";
+<B>constant</B> GROESTL_INIT_VALUE_512			:std_logic_vector(GROESTL_DATA_SIZE_BIG-1 <B>downto</B> 0) := x"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200";
+
+<B>constant</B> w		: integer := 64;		<I><FONT COLOR=#808080>-- message interface	</FONT></I>
+<I><FONT COLOR=#808080>-- number of clock cycles per architecture	</FONT></I>
+<B>constant</B> pq_roundnr256 				: integer := 21;
+<B>constant</B> pq_roundnr_final256 		: integer := 21;
+<B>constant</B> pq_log2roundnr_final256	: integer := log2( pq_roundnr256);
+	
+<B>constant</B> pq_roundnr512 				: integer := 29;
+<B>constant</B> pq_roundnr_final512 		: integer := 29;
+<B>constant</B> pq_log2roundnr_final512	: integer := log2( pq_roundnr512);	
+
+<I><FONT COLOR=#808080>-- parallel </FONT></I>
+<B>constant</B> pq_ux2_roundnr256 			: integer := 10;
+<B>constant</B> pq_ux2_roundnr_final256 	: integer := 10;
+<B>constant</B> pq_ux2_log2roundnr_final256: integer := log2( pq_ux2_roundnr256);
+
+<B>constant</B> pq_ux2_roundnr512 			: integer := 17;
+<B>constant</B> pq_ux2_roundnr_final512 	: integer := 17;
+<B>constant</B> pq_ux2_log2roundnr_final512: integer := log2( pq_ux2_roundnr512);
+
+<I><FONT COLOR=#808080>-- parallel folded 	folding factor ff=2</FONT></I>
+
+<B>constant</B> pq_ux2_fx2_roundnr256 			: integer := 20;
+<B>constant</B> pq_ux2_fx2_roundnr_final256 	: integer := 20;
+<B>constant</B> pq_ux2_fx2_log2roundnr_final256: integer := log2( pq_ux2_fx2_roundnr256);
+
+<B>constant</B> pq_ux2_fx2_roundnr512 			: integer := 28;
+<B>constant</B> pq_ux2_fx2_roundnr_final512 	: integer := 28;
+<B>constant</B> pq_ux2_fx2_log2roundnr_final512: integer := log2( pq_ux2_fx2_roundnr512);
+
+<I><FONT COLOR=#808080>-- parallel folded 	folding factor ff=4</FONT></I>
+
+<B>constant</B> pq_ux2_fx4_roundnr256 			: integer := 40;
+<B>constant</B> pq_ux2_fx4_roundnr_final256 	: integer := 40;
+<B>constant</B> pq_ux2_fx4_log2roundnr_final256: integer := log2( pq_ux2_fx4_roundnr256);
+
+<B>constant</B> pq_ux2_fx4_roundnr512 			: integer := 56;
+<B>constant</B> pq_ux2_fx4_roundnr_final512 	: integer := 56;
+<B>constant</B> pq_ux2_fx4_log2roundnr_final512: integer := log2( pq_ux2_fx4_roundnr512);
+
+<I><FONT COLOR=#808080>-- parallel folded 	folding factor ff=8</FONT></I>
+
+<B>constant</B> pq_ux2_fx8_roundnr256 			: integer := 80;
+<B>constant</B> pq_ux2_fx8_roundnr_final256 	: integer := 80;
+<B>constant</B> pq_ux2_fx8_log2roundnr_final256: integer := log2( pq_ux2_fx8_roundnr256);
+
+<B>constant</B> pq_ux2_fx8_roundnr512 			: integer := 112;
+<B>constant</B> pq_ux2_fx8_roundnr_final512 	: integer := 112;
+<B>constant</B> pq_ux2_fx8_log2roundnr_final512: integer := log2( pq_ux2_fx8_roundnr512);
+
+<I><FONT COLOR=#808080>-- quasi-pipelined folding factor ff=2</FONT></I>
+<B>constant</B> pq_fx2_roundnr256 			: integer := 42;
+<B>constant</B> pq_fx2_roundnr_final256 	: integer := 42;
+<B>constant</B> pq_fx2_log2roundnr_final256: integer := log2( pq_fx2_roundnr256);
+	
+<B>constant</B> pq_fx2_roundnr512 			: integer := 58;
+<B>constant</B> pq_fx2_roundnr_final512 	: integer := 58;
+<B>constant</B> pq_fx2_log2roundnr_final512: integer := log2( pq_fx2_roundnr512);
+
+<I><FONT COLOR=#808080>-- quasi-pipelined folding factor ff=4</FONT></I>
+<B>constant</B> pq_fx4_roundnr256 			: integer := 84;
+<B>constant</B> pq_fx4_roundnr_final256 	: integer := 84;
+<B>constant</B> pq_fx4_log2roundnr_final256: integer := log2( pq_fx4_roundnr256);
+	
+<B>constant</B> pq_fx4_roundnr512 			: integer := 116;
+<B>constant</B> pq_fx4_roundnr_final512 	: integer := 116;
+<B>constant</B> pq_fx4_log2roundnr_final512: integer := log2( pq_fx4_roundnr512);
+
+<I><FONT COLOR=#808080>-- quasi-pipelined folding factor ff=8</FONT></I>
+<B>constant</B> pq_fx8_roundnr256 			: integer := 168;
+<B>constant</B> pq_fx8_roundnr_final256 	: integer := 168;
+<B>constant</B> pq_fx8_log2roundnr_final256: integer := log2( pq_fx8_roundnr256);
+	
+<B>constant</B> pq_fx8_roundnr512 			: integer := 232;
+<B>constant</B> pq_fx8_roundnr_final512 	: integer := 232;
+<B>constant</B> pq_fx8_log2roundnr_final512: integer := log2( pq_fx8_roundnr512);
+
+
+<B>constant</B> pq_ux4_roundnr256 			: integer := 7;
+<B>constant</B> pq_ux4_roundnr_final256 	: integer := 7;
+<B>constant</B> pq_ux4_log2roundnr_final256: integer := log2( pq_ux4_roundnr256);
+
+<B>constant</B> pq_ux4_roundnr512 			: integer := 9;
+<B>constant</B> pq_ux4_roundnr_final512 	: integer := 9;
+<B>constant</B> pq_ux4_log2roundnr_final512: integer := log2( pq_ux4_roundnr512);
+
+<B>constant</B> pq_ux10_roundnr256 			: integer := 4;
+<B>constant</B> pq_ux10_roundnr_final256 		: integer := 4;
+<B>constant</B> pq_ux10_log2roundnr_final256	: integer := log2( pq_ux10_roundnr256);
+
+<B>constant</B> pq_ux14_roundnr512 		: integer := 4;
+<B>constant</B> pq_ux14_roundnr_final512 	: integer := 4;
+<B>constant</B> pq_ux14_log2roundnr_final512	: integer := log2( pq_ux14_roundnr512);
+
+<I><FONT COLOR=#808080>--constant b		: integer := GROESTL_DATA_SIZE_SMALL;</FONT></I>
+<I><FONT COLOR=#808080>--constant bseg			: integer := b/w;</FONT></I>
+<I><FONT COLOR=#808080>--constant bzeros			: std_logic_vector(b-1 downto 0) := (others => '0');</FONT></I>
+<B>constant</B> wzeros			: std_logic_vector(w-1 <B>downto</B> 0) := (<B>others</B> => '0'); 
+
+<I><FONT COLOR=#808080>-- constants for different architectures supporting embedded resources</FONT></I>
+<B>constant</B> GROESTL_SBOX_ROUND		:integer:=1;
+<B>constant</B> GROESTL_TBOX_ROUND		:integer:=2;
+
+<B>constant</B> CTR_SHORT				: integer := 16;
+<B>constant</B> CTR_FULL				: integer := 64;
+<B>constant</B> CTR_SIZE				: integer := CTR_FULL;
+	
+<B>end</B> groestl_pkg;
+
+<B>package</B> body groestl_pkg <B>is</B>
+<B>end</B> <B>package</B> body groestl_pkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

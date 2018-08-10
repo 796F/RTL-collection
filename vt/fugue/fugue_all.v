@@ -1,0 +1,6 @@
+`include "cmix_xor.v"
+`include "col_xor1516.v"
+`include "fugue256.v"
+`include "smix.v"
+`include "tix_xor.v"
+`include "fugue_top.v"

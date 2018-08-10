@@ -1,0 +1,54 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/regna.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all; 
+
+<I><FONT COLOR=#808080>-- n-bits asynchonous register </FONT></I>
+
+<B>entity</B> regna <B>is</B>
+	<B>generic</B> (  
+		RST_ACTIVE_VALUE : std_logic := '0';
+		N : integer := 32;
+		INIT : std_logic_vector
+	);
+	<B>port</B> ( 	  
+	    clk 	: <B>in</B> std_logic;
+		rst 	: <B>in</B> std_logic;
+	    en 		: <B>in</B> std_logic; 
+		input  	: <B>in</B> std_logic_vector(N-1 <B>downto</B> 0);
+        output 	: <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+	);
+<B>end</B> regna;
+
+<B>architecture</B> struct <B>of</B> regna <B>is</B>
+
+<B>begin</B>	
+	<FONT COLOR=#0000C0>gen</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>		
+		<B>if</B> ( rst = RST_ACTIVE_VALUE ) <B>then</B>
+			output <= INIT;
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> ( en = '1' ) <B>then</B>
+				output <= input;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>process</B>;
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

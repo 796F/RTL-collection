@@ -1,0 +1,35 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/gf4sqr_2.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+
+<B>entity</B> gf4sqr_2 <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>AxDI</FONT>  : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+    <FONT COLOR=#804040>A2xDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0));
+    
+<B>end</B> gf4sqr_2;
+
+<B>architecture</B> rtl <B>of</B> gf4sqr_2 <B>is</B>
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  <FONT COLOR=#804040>A2xDO</FONT>(0) <= <FONT COLOR=#804040>AxDI</FONT>(0) <B>xor</B> <FONT COLOR=#804040>AxDI</FONT>(2);
+  <FONT COLOR=#804040>A2xDO</FONT>(1) <= <FONT COLOR=#804040>AxDI</FONT>(2);
+  <FONT COLOR=#804040>A2xDO</FONT>(2) <= <FONT COLOR=#804040>AxDI</FONT>(1) <B>xor</B> <FONT COLOR=#804040>AxDI</FONT>(3);
+  <FONT COLOR=#804040>A2xDO</FONT>(3) <= <FONT COLOR=#804040>AxDI</FONT>(3);
+  
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,224 @@
+<HTML>
+<TITLE>
+ gmu_jh/sourcecode/gmu_jh_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+
+<B>use</B> work.sha3_jh_package.all;
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> gmu_jh_datapath_mem <B>is</B>	
+	<B>port</B> (
+		<I><FONT COLOR=#808080>-- external</FONT></I>
+		clk : <B>in</B> std_logic;	 
+		rst : <B>in</B> std_logic;
+		din  : <B>in</B> std_logic_vector(511 <B>downto</B> 0);	
+		dout : <B>out</B> std_logic_vector(255 <B>downto</B> 0);	
+		
+		<I><FONT COLOR=#808080>--fsm 2			  		</FONT></I>
+		round : <B>in</B> std_logic_vector(5 <B>downto</B> 0);
+		er : <B>in</B> std_logic;
+		sf : <B>in</B> std_logic;
+		srdp : <B>in</B> std_logic
+	);				  
+<B>end</B> gmu_jh_datapath_mem;
+
+
+<B>architecture</B> struct <B>of</B> gmu_jh_datapath_mem <B>is</B> 
+	<I><FONT COLOR=#808080>--input		  </FONT></I>
+	<B>signal</B> min_out : std_logic_vector(mw-1 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>-- round constant</FONT></I>
+	<B>signal</B> crd_out, crd_out_pre : std_logic_vector(crw-1 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>-- round		</FONT></I>
+	<B>signal</B> rd_out : std_logic_vector(b-1 <B>downto</B> 0);
+	
+	
+	<B>signal</B> g, dg : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> rin, rout : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> hp, hm : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> hp_or_iv : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>constant</B> iv : std_logic_vector(b-1 <B>downto</B> 0) := get_iv( 256 );
+	
+	
+	<I><FONT COLOR=#808080>-- debug  						   </FONT></I>
+	<I><FONT COLOR=#808080>-- signal crdo : std_logic_vector(b-1 downto 0);</FONT></I>
+	<I><FONT COLOR=#808080>-- constant zeros : std_logic_vector(b-1-crw downto 0) := (others => '0');</FONT></I>
+	<I><FONT COLOR=#808080>-- signal dg_m, rin_m, rout_m, rd_out_m, crd_out_m, hm_m, hp_m : std_logic_matrix;</FONT></I>
+<B>begin</B>						
+	<I><FONT COLOR=#808080>-- input register (for xor at the last round of a block )</FONT></I>
+	min_reg : regna 
+		<B>generic</B> <B>map</B> ( N => mw, init => mwzeros ) 
+		<B>port</B> <B>map</B> ( clk => clk, rst => rst, en => srdp, input => din, output => min_out );
+		
+	<I><FONT COLOR=#808080>-- input to r reg</FONT></I>
+	hm <= ( din <B>xor</B> hp_or_iv(b-1 <B>downto</B> b/2) ) & hp_or_iv(b/2-1 <B>downto</B> 0);	
+	hp_or_iv <= iv <B>when</B> sf = '1' <B>else</B> hp;	
+	
+	<I><FONT COLOR=#808080>-- group (rearrange them into correct order)		   </FONT></I>
+	g <= form_group( hm, b, crw );
+	rin <= g <B>when</B> srdp = '1' <B>else</B> rd_out;
+
+	<I><FONT COLOR=#808080>--R registers</FONT></I>
+	rreg_gen : regna 
+		<B>generic</B> <B>map</B> ( N => b, init => bzeros ) 
+		<B>port</B> <B>map</B> ( clk => clk, rst => rst, en => er, input => rin, output => rout );		
+		
+	<I><FONT COLOR=#808080>-- output to round function	 </FONT></I>
+	dg <= degroup( rout, b, crw );
+ 	hp <= dg(b-1 <B>downto</B> b/2) & ( min_out <B>xor</B> dg(b/2-1 <B>downto</B> 0) );
+		
+	<I><FONT COLOR=#808080>--- ////////////////////////////////////</FONT></I>
+	<I><FONT COLOR=#808080>-- round constant (generate using generator)		</FONT></I>
+	crd_out_pre <= rc_cons( conv_integer(round));	
+	<FONT COLOR=#0000C0>uu1</FONT>: <B>process</B> ( rst, clk ) 
+	<B>begin</B>				
+		<B>if</B> ( rst = '0' ) <B>then</B>
+		   crd_out <= (<B>others</B> => '0');
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			crd_out <= crd_out_pre;
+		<B>end</B> <B>if</B>;			
+	<B>end</B> <B>process</B>;	 
+
+	
+	<I><FONT COLOR=#808080>-- ROUND</FONT></I>
+	rd_gen 	: <B>entity</B> work.jh_rd(struct) 
+		<B>generic</B> <B>map</B> ( bw => b, cw => crw  )
+		<B>port</B> <B>map</B> ( input => rout, cr => crd_out, output => rd_out );
+	dout <= hp(255 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>--	--debug</FONT></I>
+	<I><FONT COLOR=#808080>-- rin_m <= blk2wordmatrix_inv( rin );</FONT></I>
+	<I><FONT COLOR=#808080>-- rout_m <= blk2wordmatrix_inv( rout );</FONT></I>
+	<I><FONT COLOR=#808080>-- rd_out_m <= blk2wordmatrix_inv( rd_out );</FONT></I>
+<I><FONT COLOR=#808080>--	dg_m <= blk2wordmatrix_inv( dg );</FONT></I>
+<I><FONT COLOR=#808080>--	hp_m <= blk2wordmatrix_inv( hp );</FONT></I>
+<I><FONT COLOR=#808080>--	hm_m <= blk2wordmatrix_inv( hm );</FONT></I>
+	<I><FONT COLOR=#808080>-- crdo <= crd_out & zeros;</FONT></I>
+	<I><FONT COLOR=#808080>-- crd_out_m <= blk2wordmatrix_inv( crdo );</FONT></I>
+<B>end</B> struct;		   
+
+
+<I><FONT COLOR=#808080>-- ===============================</FONT></I>
+<I><FONT COLOR=#808080>-- ============ RC ON THE FLY ===================</FONT></I>
+<I><FONT COLOR=#808080>-- ===============================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+
+<B>use</B> work.sha3_jh_package.all;
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> gmu_jh_datapath_otf <B>is</B>	
+	<B>port</B> (
+		<I><FONT COLOR=#808080>-- external</FONT></I>
+		clk : <B>in</B> std_logic;
+		rst : <B>in</B> std_logic;
+		din  : <B>in</B> std_logic_vector(511 <B>downto</B> 0);	
+		dout : <B>out</B> std_logic_vector(255 <B>downto</B> 0);	
+		
+		<I><FONT COLOR=#808080>--fsm 2			  		</FONT></I>
+		erf : <B>in</B> std_logic;
+		er : <B>in</B> std_logic;
+		sf : <B>in</B> std_logic;
+		srdp : <B>in</B> std_logic		
+	);				  
+<B>end</B> gmu_jh_datapath_otf;
+
+<B>architecture</B> struct <B>of</B> gmu_jh_datapath_otf <B>is</B>  	
+	<I><FONT COLOR=#808080>--input		  </FONT></I>
+	<B>signal</B> min_out : std_logic_vector(mw-1 <B>downto</B> 0);	
+	<I><FONT COLOR=#808080>-- round constant</FONT></I>
+	<B>signal</B> crd_out : std_logic_vector(crw-1 <B>downto</B> 0);
+	<B>signal</B> crdp : std_logic_vector(crw-1 <B>downto</B> 0);
+	<I><FONT COLOR=#808080>-- round		</FONT></I>
+	<B>signal</B> rd_out : std_logic_vector(b-1 <B>downto</B> 0);	
+	<B>signal</B> g, dg : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> rin, rout : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> hp, hm : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>signal</B> hp_or_iv : std_logic_vector(b-1 <B>downto</B> 0);			
+	<B>constant</B> iv : std_logic_vector(b-1 <B>downto</B> 0) := get_iv( 256 );
+
+	<I><FONT COLOR=#808080>-- debug  						   </FONT></I>
+<I><FONT COLOR=#808080>--	signal crdo : std_logic_vector(b-1 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--	constant zeros : std_logic_vector(b-1-crw downto 0) := (others => '0');</FONT></I>
+	<B>signal</B> dg_m, rin_m, rout_m, rd_out_m, crd_out_m, hm_m, hp_m : std_logic_matrix;
+<B>begin</B>								
+	
+	<I><FONT COLOR=#808080>-- input register (for xor at the last round of a block )</FONT></I>
+	min_reg : regna 
+		<B>generic</B> <B>map</B> ( N => mw, init => mwzeros ) 
+		<B>port</B> <B>map</B> ( clk => clk, rst => rst, en => srdp, input => din, output => min_out );
+	<I><FONT COLOR=#808080>-- input to r reg</FONT></I>
+	hm <= ( din <B>xor</B> hp_or_iv(b-1 <B>downto</B> b/2) ) & hp_or_iv(b/2-1 <B>downto</B> 0);	
+	hp_or_iv <= iv <B>when</B> sf = '1' <B>else</B> hp;	
+	
+	<I><FONT COLOR=#808080>-- group (rearrange them into correct order)		   </FONT></I>
+	g <= form_group( hm, b, crw );
+	rin <= g <B>when</B> srdp = '1' <B>else</B> rd_out;
+
+	<I><FONT COLOR=#808080>--R registers</FONT></I>
+	rreg_gen : regna 
+		<B>generic</B> <B>map</B> ( N => b, init => bzeros ) 
+		<B>port</B> <B>map</B> ( clk => clk, rst => rst, en => er, input => rin, output => rout );		
+		
+	<I><FONT COLOR=#808080>-- output to round function	 </FONT></I>
+	dg <= degroup( rout, b, crw );
+ 	hp <= dg(b-1 <B>downto</B> b/2) & ( min_out <B>xor</B> dg(b/2-1 <B>downto</B> 0) );	
+	
+	<I><FONT COLOR=#808080>-- RC </FONT></I>
+	<FONT COLOR=#0000C0>crdRegGen</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>		
+		<B>if</B> ( rst = '0' ) <B>then</B>
+			crd_out <= cr8_iv;
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> ( erf = '1' ) <B>then</B>
+				crd_out <= cr8_iv;
+			<B>elsif</B> ( er = '1' ) <B>then</B>
+				crd_out <= crdp;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>process</B>;
+	
+	crdRoundInst: <B>entity</B> work.jh_rd(struct) 
+		<B>generic</B> <B>map</B> ( bw => crw, cw => crkw ) 
+		<B>port</B> <B>map</B> ( input => crd_out, cr => crkwzeros, output => crdp);
+	<I><FONT COLOR=#808080>-- ROUND</FONT></I>
+	roundInst 	: <B>entity</B> work.jh_rd(struct) 
+		<B>generic</B> <B>map</B> ( bw => b, cw => crw  ) 
+		<B>port</B> <B>map</B> ( input => rout, cr => crd_out, output => rd_out );
+	
+	dout <= hp(255 <B>downto</B> 0);
+	
+<I><FONT COLOR=#808080>--	--debug</FONT></I>
+	 rin_m <= blk2wordmatrix_inv( rin );
+	 rout_m <= blk2wordmatrix_inv( rout );
+	 <I><FONT COLOR=#808080>-- rd_out_m <= blk2wordmatrix_inv( rd_out(ux-1) );</FONT></I>
+	dg_m <= blk2wordmatrix_inv( dg );
+	hp_m <= blk2wordmatrix_inv( hp );
+	hm_m <= blk2wordmatrix_inv( hm );
+<I><FONT COLOR=#808080>--	crdo <= crd_out & zeros;</FONT></I>
+<I><FONT COLOR=#808080>--	crd_out_m <= blk2wordmatrix_inv( crdo );</FONT></I>
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

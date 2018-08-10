@@ -1,0 +1,80 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/gmu_sha2_top.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-11 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.sha3_pkg.all;	
+<B>use</B> work.sha2_pkg.all;	
+
+<B>entity</B> gmu_sha2_top <B>is</B>
+	<B>port</B> (
+    	<FONT COLOR=#32CD32>ClkxCI</FONT>: 		<B>in</B> std_logic; <I><FONT COLOR=#808080>-- Rising Edge Triggered Clock</FONT></I>
+		<FONT COLOR=#FF6347>RstxRBI</FONT>: 		<B>in</B> std_logic; <I><FONT COLOR=#808080>-- Active-low, asynchronous Reset Signal</FONT></I>
+		<FONT COLOR=#1E90FF>InWrEnxSI</FONT>:    	<B>in</B> std_logic; <I><FONT COLOR=#808080>-- Input Enable</FONT></I>
+		<FONT COLOR=#1E90FF>FinBlockxSI</FONT>:	<B>in</B> std_logic; <I><FONT COLOR=#808080>-- Final Block</FONT></I>
+		<FONT COLOR=#804040>DataxDI</FONT>:		<B>in</B> std_logic_vector(511 <B>downto</B> 0); <I><FONT COLOR=#808080>-- Input Data</FONT></I>
+		<FONT COLOR=#CCA800>ScanInxTI</FONT>: 		<B>in</B> std_logic;
+		<FONT COLOR=#CCA800>ScanEnxTI</FONT>: 		<B>in</B> std_logic;
+		
+		<FONT COLOR=#CCA800>ScanOutxTO</FONT>: 	<B>out</B> std_logic;
+		<FONT COLOR=#1E90FF>OutWrEnxSO</FONT>:     <B>out</B> std_logic; <I><FONT COLOR=#808080>-- Output Enable</FONT></I>
+		<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>: <B>out</B> std_logic; <I><FONT COLOR=#808080>-- Penultimate Cycle</FONT></I>
+		<FONT COLOR=#804040>DataxDO</FONT>: 		<B>out</B> std_logic_vector(255 <B>downto</B> 0) <I><FONT COLOR=#808080>-- Output Data</FONT></I>
+		);
+<B>end</B> gmu_sha2_top;
+
+<B>architecture</B> rs_arch <B>of</B> gmu_sha2_top <B>is</B> 
+	<B>constant</B> a : integer := LOG_2_64;
+	
+	<B>signal</B> sel2_reg				:std_logic;
+	<B>signal</B> sel_reg				:std_logic;	
+	<B>signal</B> init_block_wire		:std_logic;
+	<B>signal</B> wr_data_reg			:std_logic;					
+	<B>signal</B> wr_state_reg			:std_logic;				
+	<B>signal</B> wr_result_reg		:std_logic;	
+	<B>signal</B> kr_wr_wire			:std_logic;	 	 
+	<B>signal</B> sel_gh_reg			:std_logic;	
+	<B>signal</B> sel_gh_reg2			:std_logic;
+	<B>signal</B> OutWrEnxSO_s			:std_logic;	 
+	<B>signal</B> init_reg				:std_logic;
+	<B>signal</B> rd_num				:std_logic_vector(a-1 <B>downto</B> 0);
+<B>begin</B>
+						   
+	datapathInst: 
+		<B>entity</B> work.gmu_sha2_datapath(sha2_datapath_rs) 
+			<B>generic</B> <B>map</B> (n=>BLOCK_SIZE_512/SHA2_WORDS_NUM, a=>LOG_2_64 )
+			<B>port</B> <B>map</B> (
+				clk => <FONT COLOR=#32CD32>ClkxCI</FONT>, rst => <FONT COLOR=#FF6347>RstxRBI</FONT>, data => <FONT COLOR=#804040>DataxDI</FONT>, dataout => <FONT COLOR=#804040>DataxDO</FONT>,
+				wr_state=>wr_state_reg, wr_result=>wr_result_reg, wr_data=>wr_data_reg, kw_wr=> kr_wr_wire, sel=>sel_reg, init_block=>init_block_wire,
+				init_reg=>init_reg, sel2=>sel2_reg,	sel_gh=>sel_gh_reg, sel_gh2=>sel_gh_reg2, rd_num=>rd_num);  
+				<FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= OutWrEnxSO_s;	 
+		
+	ctrlInst: 	
+		<B>entity</B> work.gmu_sha2_control(asic_controller)	
+			<B>generic</B> <B>map</B> ( a=>LOG_2_64 )
+			<B>port</B> <B>map</B>(
+				clk=><FONT COLOR=#32CD32>ClkxCI</FONT>, rst=><FONT COLOR=#FF6347>RstxRBI</FONT>, 			  
+				<FONT COLOR=#1E90FF>InWrEnxSI</FONT> => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT> => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSO</FONT> => OutWrEnxSO_s, <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,
+				sel2=>sel2_reg, sel=>sel_reg, sel_gh=>sel_gh_reg, wr_data=>wr_data_reg, rd_num=>rd_num,  init_block=>init_block_wire,
+				init_reg=>init_reg, sel_gh2=>sel_gh_reg2, kw_wr=> kr_wr_wire, wr_state=>wr_state_reg, wr_result=>wr_result_reg	);	
+		
+		 
+			  
+<B>end</B> rs_arch;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

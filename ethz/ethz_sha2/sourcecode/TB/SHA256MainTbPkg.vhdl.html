@@ -1,0 +1,304 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/TB/SHA256MainTbPkg.vhdl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>use</B> std.textio.all;
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.simulstuff.all;
+<B>use</B> work.sha_pack.all;
+<I><FONT COLOR=#808080>--=============================================================================</FONT></I>
+
+<B>package</B> SHA256MainTbPkg <B>is</B>
+
+  <I><FONT COLOR=#808080>-- declarations of all those signals that do connect to the MUT</FONT></I>
+  <I><FONT COLOR=#808080>-- most of them are collected in records to facilitate data handling</FONT></I>
+  <I><FONT COLOR=#808080>-- note: any bidirectional must be made part of both stimuli and responses</FONT></I>
+<I><FONT COLOR=#808080>--  type stimuliRecordType is record</FONT></I>
+<I><FONT COLOR=#808080>--    RSTxRB     : std_logic;</FONT></I>
+<I><FONT COLOR=#808080>--    VALIDINxS  : std_logic;</FONT></I>
+<I><FONT COLOR=#808080>--    MxD        : std_logic_vector(WWIDTH*16-1 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--    SxD        : std_logic_vector(WWIDTH*4-1 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--    TxD        : std_logic_vector(WWIDTH*2-1 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  end record;</FONT></I>
+
+  <B>type</B> stimuliRecordType <B>is</B> record
+    <FONT COLOR=#FF6347>RSTxRB</FONT>          : std_logic;
+    <FONT COLOR=#804040>MessageInxD</FONT>     : expmess_arr;
+    <FONT COLOR=#804040>HInxD</FONT>           : h_arr;
+    <FONT COLOR=#1E90FF>MessageReadyxS</FONT> : std_logic;
+  <B>end</B> record;
+
+  <I><FONT COLOR=#808080>-- same for actual and expected response</FONT></I>
+<I><FONT COLOR=#808080>--  type responseRecordType is record</FONT></I>
+<I><FONT COLOR=#808080>--    HxD        :  std_logic_vector(WWIDTH*8-1 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  end record;</FONT></I>
+
+  <B>type</B> responseRecordType <B>is</B> record
+    <FONT COLOR=#804040>HOutxD</FONT> : h_arr;
+  <B>end</B> record;
+
+  <I><FONT COLOR=#808080>-- as there is one element in the response record, an array with one</FONT></I>
+  <I><FONT COLOR=#808080>-- element of type respmatchtype is needed </FONT></I>
+  <B>type</B> respMatchArray <B>is</B> <B>array</B> (1 <B>to</B> 1) <B>of</B> respmatchtype;
+
+  <B>signal</B> <FONT COLOR=#32CD32>CLKxC</FONT>            : std_logic := '1';    <I><FONT COLOR=#808080>-- driving clock</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>StimuliRecxD</FONT>     : stimuliRecordType;   <I><FONT COLOR=#808080>-- record of stimuli</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>ActResponseRecxD</FONT> : responseRecordType;  <I><FONT COLOR=#808080>-- record of actual responses</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>ExpResponseRecxD</FONT> : responseRecordType;  <I><FONT COLOR=#808080>-- record of expected responses</FONT></I>
+
+  <I><FONT COLOR=#808080>-- timing of clock and simulation events</FONT></I>
+  <B>constant</B> CLK_PHASE_HIGH            : time := 5 ns;
+  <B>constant</B> CLK_PHASE_LOW             : time := 5 ns;
+  <B>constant</B> RESPONSE_ACQUISITION_TIME : time := 8 ns;
+  <B>constant</B> STIMULI_APPLICATION_TIME  : time := 2 ns;
+
+  <I><FONT COLOR=#808080>-- declaration of stimuli, expected responses, and simulation report files</FONT></I>
+  <B>constant</B> STIMULI_FILENAME : string := "../simvectors/sha256main_stimuli.asc";
+  <B>constant</B> EXPRESP_FILENAME : string := "../simvectors/sha256main_expresp.asc";
+  <B>constant</B> SIMREPT_FILENAME : string := "../simvectors/sha256main_simrept.asc";
+
+  <I><FONT COLOR=#808080>-- the files are opened implicitly right here</FONT></I>
+  <B>file</B> stimulifile : <FONT COLOR=#CCA800>text</FONT> open read_mode <B>is</B> STIMULI_FILENAME;
+  <B>file</B> simreptfile : <FONT COLOR=#CCA800>text</FONT> open write_mode <B>is</B> SIMREPT_FILENAME;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>-- function for reading stimuli data from the stimuli file</FONT></I>
+  <B>impure</B> <B>function</B> GetStimuliRecord (<B>file</B> stimulifile : <FONT COLOR=#CCA800>text</FONT>)
+    <B>return</B> stimuliRecordType;
+
+  <I><FONT COLOR=#808080>-- function for reading expected responses from the expected response file</FONT></I>
+  <B>impure</B> <B>function</B> GetExpectedResponseRecord (<B>file</B> exprespfile : <FONT COLOR=#CCA800>text</FONT>)
+    <B>return</B> responseRecordType;
+
+  <I><FONT COLOR=#808080>-- procedure for comparing actual and expected response</FONT></I>
+  <B>procedure</B> CheckResponse
+    (actRespRecord : <B>in</B>    responseRecordType;
+     expRespRecord : <B>in</B>    responseRecordType;
+     respmatch     : <B>inout</B> respMatchArray;
+     respaccount   : <B>inout</B> respaccounttype);
+
+  <I><FONT COLOR=#808080>-- procedure for writing stimuli and actual responses to the report file                     </FONT></I>
+  <B>procedure</B> PutSimulationReportTrace
+    (<B>file</B> simreptfile :       <FONT COLOR=#CCA800>text</FONT>;
+     stimuliRecord    : <B>in</B>    stimuliRecordType;
+     actRespRecord    : <B>in</B>    responseRecordType;
+     respmatch        : <B>in</B>    respMatchArray;
+     respaccount      : <B>in</B>    respaccounttype;
+     simRepLineCount  : <B>inout</B> natural);
+
+  <I><FONT COLOR=#808080>-- compose a failure message line and write it to the report file</FONT></I>
+  <B>procedure</B> PutSimulationReportFailure
+    (<B>file</B> simreptfile :    <FONT COLOR=#CCA800>text</FONT>;
+     expRespRecord    : <B>in</B> responseRecordType;
+     respmatch        : <B>in</B> respMatchArray);
+
+
+<B>end</B> <B>package</B> <FONT COLOR=#0000C0>SHA256MainTbPkg</FONT>;
+<I><FONT COLOR=#808080>--=============================================================================</FONT></I>
+
+<B>package</B> body SHA256MainTbPkg <B>is</B>
+
+  <I><FONT COLOR=#808080>-- purpose: get one record worth of expected responses from file.get one record worth of stimuli from file.</FONT></I>
+  <B>impure</B> <B>function</B> GetStimuliRecord
+    (<B>file</B> stimulifile : <FONT COLOR=#CCA800>text</FONT>)
+    <B>return</B> stimuliRecordType
+  <B>is</B>
+    <B>variable</B> in_line, in_line_tmp : line;
+    <I><FONT COLOR=#808080>-- stimuli to default to unknown in case no value is obtained from file</FONT></I>
+    <B>variable</B> stimulirecord : stimuliRecordType := (<FONT COLOR=#FF6347>RSTxRB</FONT>          => '0',
+                                                   <FONT COLOR=#804040>HInxD</FONT>           => (<B>others</B> => (<B>others</B> => 'X')),
+                                                   <FONT COLOR=#804040>MessageInxD</FONT>     => (<B>others</B> => (<B>others</B> => 'X')),
+                                                   <FONT COLOR=#1E90FF>MessageReadyxS</FONT> => '0'
+                                                   );
+  <B>begin</B>
+    <I><FONT COLOR=#808080>-- read a line from the stimuli file</FONT></I>
+    <I><FONT COLOR=#808080>-- skipping any empty and comment lines encountered</FONT></I>
+    <B>loop</B>
+      <B>readline</B>(stimulifile, in_line);
+      <I><FONT COLOR=#808080>-- copy line read to enable meaningful error messages later</FONT></I>
+      in_line_tmp := new string'(in_line(in_line'<B><I>low</I></B> <B>to</B> in_line'<B><I>high</I></B>));
+      <B>if</B> in_line_tmp'<B><I>length</I></B> >= 1 <B>then</B>
+        <B>exit</B> <B>when</B> in_line_tmp(1) /= '%';
+      <B>end</B> <B>if</B>;
+      <B>deallocate</B>(in_line_tmp);
+    <B>end</B> <B>loop</B>;
+    <I><FONT COLOR=#808080>-- extract all values of a record of stimuli</FONT></I>
+    GetFileEntry(stimulirecord.<FONT COLOR=#FF6347>RSTxRB</FONT>, in_line, in_line_tmp, STIMULI_FILENAME);
+    <B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>loop</B>
+      GetFileEntry(stimulirecord.<FONT COLOR=#804040>MessageInxD</FONT>(i), in_line, in_line_tmp, STIMULI_FILENAME);
+    <B>end</B> <B>loop</B>;
+    <B>for</B> i <B>in</B> 7 <B>downto</B> 0 <B>loop</B>
+      GetFileEntry(stimulirecord.<FONT COLOR=#804040>HInxD</FONT>(i), in_line, in_line_tmp, STIMULI_FILENAME);
+    <B>end</B> <B>loop</B>;
+    GetFileEntry(stimulirecord.<FONT COLOR=#1E90FF>MessageReadyxS</FONT>, in_line, in_line_tmp, STIMULI_FILENAME);
+<I><FONT COLOR=#808080>--    GetFileEntry(stimulirecord.MessageInxD, in_line, in_line_tmp, STIMULI_FILENAME);</FONT></I>
+<I><FONT COLOR=#808080>--    GetFileEntry(stimulirecord.HxD, in_line, in_line_tmp, STIMULI_FILENAME);</FONT></I>
+    <I><FONT COLOR=#808080>-- deallocate line copy now that all entries have been read</FONT></I>
+    <B>deallocate</B>(in_line_tmp);
+    <B>return</B> stimulirecord;
+  <B>end</B> GetStimuliRecord;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>-- purpose: get one record worth of expected responses from file.</FONT></I>
+  <B>impure</B> <B>function</B> GetExpectedResponseRecord (<B>file</B> exprespfile : <FONT COLOR=#CCA800>text</FONT>)
+    <B>return</B> responseRecordType
+  <B>is</B>
+    <B>variable</B> in_line, in_line_tmp : line;
+    <I><FONT COLOR=#808080>-- expected responses to default to don't care</FONT></I>
+    <I><FONT COLOR=#808080>-- in case no value is obtained from file</FONT></I>
+    <B>variable</B> expresprecord        : responseRecordType := (<FONT COLOR=#804040>HoutxD</FONT> => (<B>others</B> => (<B>others</B> => '-')));
+  <B>begin</B>
+    <I><FONT COLOR=#808080>-- read a line from the expected response file as long as there are any</FONT></I>
+    <I><FONT COLOR=#808080>-- skipping any empty and comment lines encountered      </FONT></I>
+    <B>if</B> <B>not</B>(endfile(exprespfile)) <B>then</B>
+      <B>loop</B>
+        <B>readline</B>(exprespfile, in_line);
+        <I><FONT COLOR=#808080>-- copy line read to enable meaningful error messages later</FONT></I>
+        in_line_tmp := new string'(in_line(in_line'<B><I>low</I></B> <B>to</B> in_line'<B><I>high</I></B>));
+        <B>if</B> in_line_tmp'<B><I>length</I></B> >= 1 <B>then</B>
+          <B>exit</B> <B>when</B> in_line_tmp(1) /= '%';
+        <B>end</B> <B>if</B>;
+        <B>deallocate</B>(in_line_tmp);
+      <B>end</B> <B>loop</B>;
+      <I><FONT COLOR=#808080>-- extract all values of a record of expected responses</FONT></I>
+      <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+        GetFileEntry(expresprecord.<FONT COLOR=#804040>HOutxD</FONT>(i), in_line, in_line_tmp, EXPRESP_FILENAME);
+      <B>end</B> <B>loop</B>;
+<I><FONT COLOR=#808080>--      GetFileEntry(expresprecord.HxD, in_line, in_line_tmp, EXPRESP_FILENAME);</FONT></I>
+      <I><FONT COLOR=#808080>-- deallocate line copy now that all entries have been read</FONT></I>
+      <B>deallocate</B>(in_line_tmp);
+      <I><FONT COLOR=#808080>-- return default value in case EOF is overrun, no else clause needed</FONT></I>
+    <B>end</B> <B>if</B>;
+    <B>return</B> expresprecord;
+  <B>end</B> GetExpectedResponseRecord;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>--  purpose: procedure for comparing actual and expected response</FONT></I>
+  <B>procedure</B> CheckResponse
+    (actRespRecord : <B>in</B>    responseRecordType;
+     expRespRecord : <B>in</B>    responseRecordType;
+     respmatch     : <B>inout</B> respMatchArray;
+     respaccount   : <B>inout</B> respaccounttype)
+  <B>is</B>
+  <B>begin</B>
+    <B>for</B> i <B>in</B> 7 <B>downto</B> 0 <B>loop</B>
+      CheckValue(<FONT COLOR=#804040>ActResponseRecxD</FONT>.<FONT COLOR=#804040>HoutxD</FONT>(i), <FONT COLOR=#804040>ExpResponseRecxD</FONT>.<FONT COLOR=#804040>HOutxD</FONT>(i), respmatch(1), respaccount);
+    <B>end</B> <B>loop</B>;
+<I><FONT COLOR=#808080>--    CheckValue(ActResponseRecxD.HxD, ExpResponseRecxD.HxD, respmatch(1), respaccount);</FONT></I>
+    
+  <B>end</B> CheckResponse;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>-- purpose: writing stimuli and actual responses to the report file.</FONT></I>
+  <B>procedure</B> PutSimulationReportTrace
+    (<B>file</B> simreptfile :       <FONT COLOR=#CCA800>text</FONT>;
+     stimuliRecord    : <B>in</B>    stimuliRecordType;
+     actRespRecord    : <B>in</B>    responseRecordType;
+     respmatch        : <B>in</B>    respMatchArray;
+     respaccount      : <B>in</B>    respaccounttype;
+     simRepLineCount  : <B>inout</B> natural)
+  <B>is</B>
+    <B>constant</B> N        : natural := 10000;
+    <B>variable</B> out_line : line;
+  <B>begin</B>
+    <I><FONT COLOR=#808080>-- write every N lines the caption of the signals to the simulation report</FONT></I>
+    <B>if</B> simRepLineCount mod N = 0 <B>then</B>
+      <B>write</B>(out_line, string'(" "));
+      <B>writeline</B>(simreptfile, out_line);
+      <B>write</B>(out_line, string'("Time            <FONT COLOR=#FF6347>RSTxRB</FONT>"));
+      <B>writeline</B>(simreptfile, out_line);
+      <B>write</B>(out_line, string'("|               |   <FONT COLOR=#804040>MxDI</FONT>                                                                                                                                    <FONT COLOR=#804040>HxDO</FONT>"));
+      <B>writeline</B>(simreptfile, out_line);
+      <B>write</B>(out_line, string'("|               |   |                                                                                                                                       |"));
+      <B>writeline</B>(simreptfile, out_line);
+      <B>write</B>(out_line, string'("|               |   |                                                                                                                                       |"));
+      <B>writeline</B>(simreptfile, out_line);
+      <B>write</B>(out_line, string'("|               |   |                                                                                                                                       |"));
+      <B>writeline</B>(simreptfile, out_line);
+    <B>end</B> <B>if</B>;
+    simRepLineCount := simRepLineCount + 1;
+
+    <I><FONT COLOR=#808080>-- begin with simulation time</FONT></I>
+    <B>write</B>(out_line, string'("at "));
+    <B>write</B>(out_line, now);
+    <I><FONT COLOR=#808080>-- add stimuli</FONT></I>
+    <B>write</B>(out_line, ht);
+    <B>write</B>(out_line, stimuliRecord.<FONT COLOR=#FF6347>RSTxRB</FONT>);
+    <B>write</B>(out_line, string'("   "));
+    <I><FONT COLOR=#808080>-- add actual response 1</FONT></I>
+    <B>write</B>(out_line, string'("        "));
+    <B>for</B> i <B>in</B> 7 <B>downto</B> 0 <B>loop</B>
+      hwrite(out_line, actRespRecord.<FONT COLOR=#804040>HOutxD</FONT>(i));
+    <B>end</B> <B>loop</B>;
+<I><FONT COLOR=#808080>--    hwrite(out_line, actRespRecord.HxD);</FONT></I>
+
+    <B>case</B> respmatch(1) <B>is</B>
+      <B>when</B> mok =>
+        <B>write</B>(out_line, string'("     "));  <I><FONT COLOR=#808080>-- if the actual matches with</FONT></I>
+                                            <I><FONT COLOR=#808080>-- the expected response</FONT></I>
+      <B>when</B> mne =>
+   "));  <I><FONT COLOR=#808080>-- if there was no expected response</FONT></I>
+                                            <I><FONT COLOR=#808080>-- for this actual response, write</FONT></I>
+                                        <I><FONT COLOR=#808080>-- a '-' behind the actual response </FONT></I>
+      <B>when</B> mlf =>
+        <B>write</B>(out_line, string'(" l   "));  <I><FONT COLOR=#808080>-- if the actual doesn't match logically</FONT></I>
+                                        <I><FONT COLOR=#808080>-- with the expected response, write an</FONT></I>
+                                        <I><FONT COLOR=#808080>-- an 'l' behind the actual response</FONT></I>
+      <B>when</B> msf =>
+        <B>write</B>(out_line, string'(" s   "));  <I><FONT COLOR=#808080>-- if the actual doesn't match in strength</FONT></I>
+                                        <I><FONT COLOR=#808080>-- with the expected response, write an</FONT></I>
+                                        <I><FONT COLOR=#808080>-- an 's' behind the actual response</FONT></I>
+      <B>when</B> <B>others</B> =>                    <I><FONT COLOR=#808080>-- when mil</FONT></I>
+        <B>write</B>(out_line, string'(" i   "));  <I><FONT COLOR=#808080>-- if the actual response is "don't care",</FONT></I>
+                                            <I><FONT COLOR=#808080>-- write an 'i' behind the actual response</FONT></I>
+    <B>end</B> <B>case</B>;
+
+    <I><FONT COLOR=#808080>-- write the output line to the report file</FONT></I>
+    <B>writeline</B>(simreptfile, out_line);
+  <B>end</B> PutSimulationReportTrace;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  <I><FONT COLOR=#808080>-- purpose: compose a failure message line and write it to the report file.</FONT></I>
+  <B>procedure</B> PutSimulationReportFailure
+    (<B>file</B> simreptfile :    <FONT COLOR=#CCA800>text</FONT>;
+     expRespRecord    : <B>in</B> responseRecordType;
+     respmatch        : <B>in</B> respMatchArray)
+  <B>is</B>
+    <B>variable</B> out_line : line;
+  <B>begin</B>
+
+    <I><FONT COLOR=#808080>-- if at least one actual doesn't match with its expected response</FONT></I>
+    <B>if</B> (respmatch(1) /= mok <B>and</B> respmatch(1) /= mne) <B>then</B>
+
+      <B>write</B>(out_line, string'("^^ Failure! Expected was :"));
+
+      <I><FONT COLOR=#808080>-- if actual response 1 doesn't match with its expected response</FONT></I>
+      <B>if</B> respmatch(1) /= mok <B>and</B> respmatch(1) /= mne <B>then</B>
+        <I><FONT COLOR=#808080>-- add expected response</FONT></I>
+        <B>write</B>(out_line, string'("                 "));
+        <B>for</B> i <B>in</B> 7 <B>downto</B> 0 <B>loop</B>
+          hwrite(out_line, expRespRecord.<FONT COLOR=#804040>HOutxD</FONT>(i));
+        <B>end</B> <B>loop</B>;
+<I><FONT COLOR=#808080>--        hwrite(out_line, expRespRecord.HxD);</FONT></I>
+        
+      <B>else</B>
+        <B>write</B>(out_line, string'("                  "));
+      <B>end</B> <B>if</B>;
+
+      <B>writeline</B>(simreptfile, out_line);
+    <B>end</B> <B>if</B>;
+  <B>end</B> PutSimulationReportFailure;
+
+<B>end</B> <B>package</B> body SHA256MainTbPkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

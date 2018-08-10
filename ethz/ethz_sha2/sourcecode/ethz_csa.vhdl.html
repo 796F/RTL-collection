@@ -1,0 +1,78 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/ethz_csa.vhdl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Carry Save Adder</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_csa.vhdl</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Köppel Benedikt;Schnydrig Mathias  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2010-12-16</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-29</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Carry Save Adder</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2010 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2010-12-16  1.0      sem10h7	Created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-29  1.1      kgf     renamed the instance to avoid name conflicts</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- This is only a Modulo-WIDTH CSA!</FONT></I>
+<I><FONT COLOR=#808080>-- because we're only interested in Addition-Modulo, we can omit everything</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+
+
+
+<B>entity</B> ethz_csa <B>is</B>
+  
+  <B>generic</B> (
+    WIDTH : integer := 32);
+
+  <B>port</B> (
+    <FONT COLOR=#804040>XxDI</FONT> : <B>in</B> std_logic_vector(WIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>YxDI</FONT> : <B>in</B> std_logic_vector(WIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>ZxDI</FONT> : <B>in</B> std_logic_vector(WIDTH-1 <B>downto</B> 0);
+
+    <FONT COLOR=#804040>CxDO</FONT> : <B>out</B> std_logic_vector(WIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>SxDO</FONT> : <B>out</B> std_logic_vector(WIDTH-1 <B>downto</B> 0)
+    );
+
+<B>end</B> ethz_csa;
+
+<B>architecture</B> behave <B>of</B> ethz_csa <B>is</B>
+  <B>signal</B> <FONT COLOR=#804040>CFULLxDO</FONT> : std_logic_vector(WIDTH <B>downto</B> 0);
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- behave</FONT></I>
+
+  <FONT COLOR=#804040>SxDO</FONT> <= <FONT COLOR=#804040>XxDI</FONT> <B>xor</B> <FONT COLOR=#804040>YxDI</FONT> <B>xor</B> <FONT COLOR=#804040>ZxDI</FONT>;
+  
+  <FONT COLOR=#804040>CFULLxDO</FONT> <= ( (<FONT COLOR=#804040>XxDI</FONT> <B>and</B> <FONT COLOR=#804040>YxDI</FONT>) <B>or</B> (<FONT COLOR=#804040>XxDI</FONT> <B>and</B> <FONT COLOR=#804040>ZxDI</FONT>) <B>or</B> (<FONT COLOR=#804040>YxDI</FONT> <B>and</B> <FONT COLOR=#804040>ZxDI</FONT>) ) & '0';
+  <FONT COLOR=#804040>CxDO</FONT> <= <FONT COLOR=#804040>CFULLxDO</FONT>(WIDTH-1 <B>downto</B> 0);
+
+<B>end</B> behave;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

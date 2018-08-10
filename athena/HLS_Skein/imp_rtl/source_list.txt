@@ -1,0 +1,4 @@
+fifo_interface_din.vhd
+fifo_interface_dout.vhd
+skein.vhd
+hls_skein.vhd

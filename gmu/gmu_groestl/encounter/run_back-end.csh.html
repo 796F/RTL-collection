@@ -1,0 +1,50 @@
+<HTML>
+<TITLE>
+ gmu_groestl/encounter/run_back-end.csh
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /bin/csh -f </FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># v0.2 -  - Tue Oct  4 12:32:36 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - added a loop for the utilization as well </FONT></I>
+<I><FONT COLOR=#808080># v0.1 -  - Mon Sep 26 13:42:14 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - first version</FONT></I>
+
+<B>setenv</B> VER "10-12.000"
+
+<B>setenv</B> CLOCKLIST " 1.0 "
+<B>setenv</B> UTILLIST  " 0.8 "
+
+<B>if</B> ( -e ./scripts/design_settings.csh ) <B>then</B>
+  <B>source</B> ./scripts/design_settings.csh
+<B>else</B>
+  <B>echo</B> "*WARNING: Default setings are taken, no design_settings.csh file exists!"
+<B>endif</B>
+
+<B>foreach</B> CLK ( <I><FONT COLOR=0000FF>$CLOCKLIST</FONT></I> ) 
+ <B>setenv</B> CLOCK <I><FONT COLOR=0000FF>$CLK</FONT></I>
+ <B>foreach</B> UTIL ( <I><FONT COLOR=0000FF>$UTILLIST</FONT></I> )
+    <B>setenv</B> COREUT <I><FONT COLOR=0000FF>$UTIL</FONT></I>
+    <B>echo</B> "-------------------------------------------------------------------------------"
+    <B>echo</B> "-- Clock: <I><FONT COLOR=0000FF>$CLOCK</FONT></I> ns, CORE Utilization <I><FONT COLOR=0000FF>$COREUT</FONT></I> "
+    <B>echo</B> "-------------------------------------------------------------------------------"
+    <B>echo</B> "run encounter"
+
+    <B>echo</B> "create_clock -period  <I><FONT COLOR=0000FF>$CLOCK</FONT></I> [get_ports {ClkxCI}]" > src/block_mmmc_clock.sdc
+
+    cds_edi<I><FONT COLOR=0000FF>$VER</FONT></I> encounter -nowin \
+                          -cmd encounter_<I><FONT COLOR=0000FF>${CLOCK}</FONT></I>_<I><FONT COLOR=0000FF>${COREUT}</FONT></I>.cmd \
+                          -log encounter_<I><FONT COLOR=0000FF>${CLOCK}</FONT></I>_<I><FONT COLOR=0000FF>${COREUT}</FONT></I>.log \
+                          -init ../../common/encounter/block_back-<B>end</B>.tcl 
+                         <I><FONT COLOR=#808080>#>  /dev/null</FONT></I>
+  <B>end</B> <I><FONT COLOR=#808080># UTIL</FONT></I>
+<B>end</B> <I><FONT COLOR=#808080># CLK</FONT></I>
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

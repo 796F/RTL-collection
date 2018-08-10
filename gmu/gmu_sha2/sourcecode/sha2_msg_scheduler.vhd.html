@@ -1,0 +1,103 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/sha2_msg_scheduler.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-11 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all; 
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha2_pkg.all;
+
+<B>entity</B> sha2_msg_scheduler <B>is</B> 
+<B>generic</B>(n : integer :=HASH_SIZE_256/SHA2_WORDS_NUM);
+<B>port</B>(
+	clk			: <B>in</B> std_logic;	 
+	rst			: <B>in</B> std_logic;
+	sel			: <B>in</B> std_logic;	
+	init		: <B>in</B> std_logic;
+	wr_data		: <B>in</B> std_logic;
+	data		: <B>in</B> std_logic_vector(511 <B>downto</B> 0);
+	w			: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> sha2_msg_scheduler;
+
+<B>architecture</B> mod_mc_evoy <B>of</B> sha2_msg_scheduler <B>is</B>				 
+
+<B>type</B> matrix <B>is</B> <B>array</B> (0 <B>to</B> 15) <B>of</B> std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> wires			: matrix;	  
+<B>signal</B> wires_in			: matrix;				 			
+<B>signal</B> wires_in0_mux	: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> wwires			: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> d_one_wire 		: std_logic_vector(n-1 <B>downto</B> 0);
+<B>signal</B> d_zero_wire		: std_logic_vector(n-1 <B>downto</B> 0);  
+<B>signal</B> first_stage		: std_logic_vector(n-1 <B>downto</B> 0);  
+<B>signal</B> to_second_stage	: std_logic_vector(n-1 <B>downto</B> 0);  
+<B>signal</B> second_stage		: std_logic_vector(n-1 <B>downto</B> 0);  
+<B>signal</B> to_third_stage	: std_logic_vector(n-1 <B>downto</B> 0); 			
+<B>constant</B> zero 			: std_logic_vector(n-1 <B>downto</B> 0):=(<B>others</B>=>'0');
+<B>begin</B>										  
+							   
+	wires_in0_mux <= wwires <B>when</B> sel = '1' <B>else</B> wires(15);
+	wires_in(0) <= data(511 <B>downto</B> 480) <B>when</B> init = '1' <B>else</B> wires_in0_mux;
+											
+	<FONT COLOR=#0000C0>inputGen</FONT>: <B>for</B> j <B>in</B> 15 <B>downto</B> 1 <B>generate</B>											
+		wires_in(j) <= data(n*j-1 <B>downto</B> n*(j-1)) <B>when</B> init = '1' <B>else</B> wires(j-1);
+	<B>end</B> <B>generate</B>;
+
+	regGen: 
+		<B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>generate</B>
+		regProc: 
+			<B>process</B>(rst, clk)
+			<B>begin</B>		
+				<B>if</B> (rst = '0' ) <B>then</B>
+					wires(i) <= (<B>others</B> => '0');
+				<B>elsif</B> rising_edge( clk )  <B>then</B>
+					<B>if</B> (wr_data = '1') <B>then</B>
+						wires(i) <= wires_in(i);
+					<B>end</B> <B>if</B>;
+				<B>end</B> <B>if</B>;   
+			<B>end</B> <B>process</B>;	  
+		<B>end</B> <B>generate</B>;	
+	
+	a32: <B>if</B> n=ARCH_32 <B>generate</B>
+	d0	: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func)  	<B>generic</B> <B>map</B> (n=>n, func=>"ms", a=>ARCH32_MS0_1, b=>ARCH32_MS0_2, c=>ARCH32_MS0_3) <B>port</B> <B>map</B> (x=>wires(12), o=>d_zero_wire);
+	d1	: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func)  	<B>generic</B> <B>map</B> (n=>n, func=>"ms", a=>ARCH32_MS1_1, b=>ARCH32_MS1_2, c=>ARCH32_MS1_3) <B>port</B> <B>map</B> (x=>wires(1), o=>d_one_wire);
+	<B>end</B> <B>generate</B>;
+	
+	a64: <B>if</B> n=ARCH_64 <B>generate</B>
+	d0	: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func)  	<B>generic</B> <B>map</B> (n=>n, func=>"ms", a=>ARCH64_MS0_1, b=>ARCH64_MS0_2, c=>ARCH64_MS0_3) <B>port</B> <B>map</B> (x=>wires(12), o=>d_zero_wire);
+	d1	: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func)  	<B>generic</B> <B>map</B> (n=>n, func=>"ms", a=>ARCH64_MS1_1, b=>ARCH64_MS1_2, c=>ARCH64_MS1_3) <B>port</B> <B>map</B> (x=>wires(1), o=>d_one_wire);
+	<B>end</B> <B>generate</B>;
+	
+	first_stage <= d_zero_wire + wires(13);
+	
+	reg01	: <B>entity</B> work.regna(struct) 
+		<B>generic</B> <B>map</B> (n=>n, init=>zero) 
+		<B>port</B> <B>map</B>(clk=>clk, en=>wr_data, rst=>rst, input=>first_stage, output=>to_second_stage);
+	
+	second_stage <= to_second_stage + wires(5);
+	
+	reg02	: <B>entity</B> work.regna(struct) 
+		<B>generic</B> <B>map</B> (n=>n, init=>zero) 
+		<B>port</B> <B>map</B>(clk=>clk, en=>wr_data, rst=>rst, input=>second_stage, output=>to_third_stage);
+	
+	wwires <= to_third_stage + d_one_wire;
+	
+	w <= wires(0);										 
+<B>end</B> mod_mc_evoy;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,6 @@
+fifo_interface_din.vhd
+fifo_interface_dout.vhd
+chi.vhd
+keccak_KeccakRoundConstants.vhd
+keccak.vhd
+hls_keccak.vhd

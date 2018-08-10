@@ -1,0 +1,41 @@
+<HTML>
+<TITLE>
+ gmu_jh/sourcecode/jh_lt.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;  
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> jh_lt <B>is</B>
+	<B>port</B>
+	(
+		a: <B>in</B> std_logic_vector(3 <B>downto</B> 0);
+		b: <B>in</B> std_logic_vector(3 <B>downto</B> 0);
+		c: <B>out</B> std_logic_vector(3 <B>downto</B> 0);
+		d: <B>out</B> std_logic_vector(3 <B>downto</B> 0)
+	);
+<B>end</B> jh_lt;
+
+<B>architecture</B> struct <B>of</B> jh_lt <B>is</B>
+	<B>signal</B> temp: std_logic_vector(3 <B>downto</B> 0);
+<B>begin</B>	  
+	temp <= (rolx(a,1) <B>xor</B> b) <B>xor</B> ("00" & a(3) & '0');
+	c <= (rolx(temp,1) <B>xor</B> a) <B>xor</B> ("00" & temp(3) & '0');
+	d <= temp;
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

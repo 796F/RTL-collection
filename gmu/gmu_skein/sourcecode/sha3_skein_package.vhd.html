@@ -1,0 +1,119 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/sha3_skein_package.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all;  
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> work.sha3_pkg.all;
+
+<B>package</B> sha3_skein_package <B>is</B>	
+	<B>constant</B> iw				: integer := 64;		<I><FONT COLOR=#808080>-- DO NOT CHANGE VALUE: internal width is always 64 bits</FONT></I>
+	<B>constant</B> iwzeros		: std_logic_vector(iw-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	
+	<B>type</B> key_array <B>is</B> <B>array</B> (natural range <>) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	<B>type</B> round_array <B>is</B> <B>array</B> (natural range <>, natural range <>) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>-- constants</FONT></I>
+	<B>constant</B> key_const_round2 : std_logic_vector(63 <B>downto</B> 0)	:= 	x"5555555555555555";		 
+	<B>constant</B> key_const_round3 : std_logic_vector(63 <B>downto</B> 0)	:= 	x"1BD11BDAA9FC1A22";
+		
+	<B>constant</B> key_iv_512_256_r2 : std_logic_vector(511 <B>downto</B> 0):= 	x"85A195B18B2264EC" & x"7A6DAC64C047C2B0" & x"E1A21465EE3FE124" & x"1D2117356504425A" & 
+																	x"C962DC0FC0046F2C" & x"8D5A3E904B1BE9C8" & x"AFB7174BBD8FEEE9" & x"7FE63D9BF94EDEB8"; 
+	<B>constant</B> key_iv_512_512_r2 : std_logic_vector(511 <B>downto</B> 0):= 	x"1A9A721C8A265CA5" & x"C9ABACF5AA853978" & x"4AF6652AB80A2883" & x"66F5E8A809A773C7" &
+																	x"7FA984B781BAAF5B" & x"0FE5D2D93233F397" & x"6E29F932DCB412D7" & x"D40CD9472F225C23";	
+	<B>constant</B> key_iv_512_256_r3 : std_logic_vector(511 <B>downto</B> 0):= 	x"CCD044A12FDB3E13E83590301A79A9EB55AEA0614F816E6F2A2767A4AE9B94DB" & 
+																	x"EC06025E74DD7683E7A436CDC4746251C36FBAF9393AD1853EEDBA1833EDFC13"; 
+	<B>constant</B> key_iv_512_512_r3 : std_logic_vector(511 <B>downto</B> 0):= 	x"4903ADFF749C51CE0D95DE399746DF038FD1934127C79BCE9A255629FF352CB1" &
+																	x"5DB62599DF6CA7B0EABE394CA9D5C3F4991112C71A75B523AE18A40B660FCC33";	
+
+	
+	<B>constant</B> TW_MSG_CONS : std_logic_vector(5 <B>downto</B> 0) := conv_std_logic_vector(48,6);
+	<B>constant</B> TW_OUT_CONS : std_logic_vector(5 <B>downto</B> 0) := conv_std_logic_vector(63,6);
+	
+	<B>type</B> rot_type <B>is</B> <B>array</B> (natural range <>,natural range <>) <B>of</B> integer;	  
+
+	<B>constant</B> rot_512 : rot_type(0 <B>to</B> 3,0 <B>to</B> 7) := ( 	(46, 33, 17, 44, 39, 13, 25,  8),(36, 27, 49,  9, 30, 50, 29, 35),
+													(19, 14, 36, 54, 34, 10, 39, 56),(37, 42, 39, 56, 24, 17, 43, 22) );	
+	
+	<B>type</B> permute_type <B>is</B> <B>array</B> (natural range <>) <B>of</B> integer range 0 <B>to</B> 15;
+	<B>function</B> get_perm ( b : integer ) <B>return</B> permute_type;
+	<B>function</B> get_rot ( b : integer ) <B>return</B> rot_type;		
+	<B>function</B> get_iv ( h : integer; version : integer  ) <B>return</B> std_logic_vector;  
+	<B>function</B> get_key_const ( version : integer ) <B>return</B> std_logic_vector;
+	
+	
+<B>end</B> sha3_skein_package;
+
+<B>package</B> body sha3_skein_package <B>is</B>
+	
+	<B>function</B> get_perm ( b : integer ) <B>return</B> permute_type <B>is</B>						 
+		<B>constant</B> perm_256 : permute_type(0 <B>to</B> 3) := (0, 3, 2 , 1);
+		<B>constant</B> perm_512 : permute_type(0 <B>to</B> 7) := (2, 1, 4, 7, 6, 5, 0, 3);
+		<B>constant</B> perm_1024 : permute_type(0 <B>to</B> 15)  := (0, 9, 2, 13, 6, 11, 4, 15, 10, 7, 12, 3, 14, 5, 8, 1);
+	<B>begin</B>
+		<B>if</B> ( b = 256 ) <B>then</B>
+			<B>return</B> perm_256;
+		<B>elsif</B> ( b = 512 ) <B>then</B>
+			<B>return</B> perm_512;
+		<B>else</B>
+			<B>return</B> perm_1024;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>function</B> <FONT COLOR=#0000C0>get_perm</FONT>;	  
+	
+	<B>function</B> get_rot ( b : integer ) <B>return</B> rot_type <B>is</B>						 
+		<B>constant</B> rot_256 : rot_type(0 <B>to</B> 1,0 <B>to</B> 7) := (	(14, 52, 23, 5, 25, 46, 58, 32),(16, 57, 40, 37, 33, 12, 22, 32) );	 
+		<B>constant</B> rot_512 : rot_type(0 <B>to</B> 3,0 <B>to</B> 7) := ( 	(46, 33, 17, 44, 39, 13, 25,  8),(36, 27, 49,  9, 30, 50, 29, 35),
+													(19, 14, 36, 54, 34, 10, 39, 56),(37, 42, 39, 56, 24, 17, 43, 22) );
+	<B>begin</B>
+		<B>if</B> ( b = 256 ) <B>then</B>
+			<B>return</B> rot_256;
+		<B>else</B>
+			<B>return</B> rot_512;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>function</B>;
+	
+	<B>function</B> get_iv ( h : integer; version : integer ) <B>return</B> std_logic_vector <B>is</B>						 
+	<B>begin</B>
+		<B>if</B> ( h = 256 ) <B>then</B>								 
+			<B>if</B> ( version = SHA3_ROUND2 ) <B>then</B>
+				<B>return</B> switch_endian_word(key_iv_512_256_r2,512,64);
+			<B>else</B>
+				<B>return</B> switch_endian_word(key_iv_512_256_r3,512,64);
+			<B>end</B> <B>if</B>;
+		<B>else</B>														 
+			<B>if</B> (version = SHA3_ROUND2 ) <B>then</B>
+				<B>return</B> switch_endian_word(key_iv_512_512_r2,512,64);
+			<B>else</B>
+				<B>return</B> switch_endian_word(key_iv_512_512_r3,512,64);
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>function</B>;			
+	
+	<B>function</B> get_key_const ( version : integer ) <B>return</B> std_logic_vector <B>is</B>						 
+	<B>begin</B>
+		<B>if</B> ( version = SHA3_ROUND2 ) <B>then</B>								 
+			<B>return</B> key_const_round2;
+		<B>else</B>
+			<B>return</B> key_const_round3;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>function</B>;
+	
+<B>end</B> <B>package</B> <FONT COLOR=#0000C0>body</FONT>;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

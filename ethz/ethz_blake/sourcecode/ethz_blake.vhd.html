@@ -1,0 +1,213 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/ethz_blake.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Blake wrapper</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_blake.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Beat Muheim  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-16</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-16</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: top of blake</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-15  1.0      bm	Creat</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-23  1.1      bm	renamed TxD->MsgLenxD, INENxE->InWrEnxS</FONT></I>
+<I><FONT COLOR=#808080>--                              OUTENxE->OutWrEnxS</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-23  1.2	bm	Fix OutWrEnxSO tosynopsys/scripts/blake.tcl flag correct on the end.</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-30  1.3	bm	Change signals to mixed letter.</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-16  2.0	bm	New ethz_blake: combine ethz_blake and black in one</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> ethz_blake <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#804040>MxDI</FONT>           : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+    <FONT COLOR=#804040>SxDI</FONT>           : <B>in</B>  std_logic_vector(127 <B>downto</B> 0);
+    <FONT COLOR=#804040>MsgLenxDI</FONT>      : <B>in</B>  std_logic_vector( 63 <B>downto</B> 0);
+    <FONT COLOR=#804040>HxDO</FONT>           : <B>out</B> std_logic_vector(255 <B>downto</B> 0);
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic
+    );
+
+<B>end</B> ethz_blake;
+
+<B>architecture</B> top <B>of</B> ethz_blake <B>is</B>
+
+  <B>component</B> controller
+    <B>port</B> (
+      <FONT COLOR=#32CD32>CLKxCI</FONT>         : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>VALIDINxSI</FONT>     : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>    : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      : <B>out</B> std_logic;
+      NewBlockSO     : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>ICNTxSO</FONT>        : <B>out</B> unsigned(3 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>ROUNDxSO</FONT>       : <B>out</B> unsigned(3 <B>downto</B> 0)
+      );
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> initialization
+    <B>port</B> (
+      <FONT COLOR=#804040>HxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*8-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>SxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*4-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>TxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>VxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH*16-1 <B>downto</B> 0)
+      );
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> roundreg
+    <B>port</B> (
+      <FONT COLOR=#32CD32>CLKxCI</FONT>   : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>  : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>WEIxSI</FONT>   : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>ICNTxSI</FONT>  : <B>in</B>  unsigned(3 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>ROUNDxSI</FONT> : <B>in</B>  unsigned(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>VxDI</FONT>     : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>MxDI</FONT>     : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>VxDO</FONT>     : <B>out</B> std_logic_vector(WWIDTH*16-1 <B>downto</B> 0)
+      );
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> finalization
+    <B>port</B> (
+      <FONT COLOR=#804040>VxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>HxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*8-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>SxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*4-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>HxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH*8-1 <B>downto</B> 0)
+      );
+  <B>end</B> <B>component</B>;
+
+  <B>signal</B> <FONT COLOR=#1E90FF>ICNTxS</FONT>                         : unsigned(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#1E90FF>ROUNDxS</FONT>                        : unsigned(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>VxD</FONT>, <FONT COLOR=#804040>VFINALxD</FONT>                  : std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>                     : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT>                       : std_logic;
+  <B>signal</B> NewBlockS                      : std_logic;
+  <B>signal</B> <FONT COLOR=#804040>OutHxD</FONT>, <FONT COLOR=#804040>InHxD</FONT>, <FONT COLOR=#804040>HxD</FONT>, <FONT COLOR=#804040>HxDP</FONT>, <FONT COLOR=#804040>HxDN</FONT> : std_logic_vector(WWIDTH*8-1  <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>MxD</FONT>, <FONT COLOR=#804040>MxDP</FONT>, <FONT COLOR=#804040>MxDN</FONT>                : std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+
+<B>begin</B>  <I><FONT COLOR=#808080>--top</FONT></I>
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- CONTROLLER</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  u_controller: controller
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>CLKxCI</FONT>         => <FONT COLOR=#32CD32>CLKxCI</FONT>,
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>        => <FONT COLOR=#FF6347>RSTxRBI</FONT>,
+      <FONT COLOR=#1E90FF>VALIDINxSI</FONT>     => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>,
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>,
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>    => <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>,
+      <FONT COLOR=#1E90FF>NewMsgxSO</FONT>      => <FONT COLOR=#1E90FF>NewMsgxS</FONT>,
+      NewBlockSO     => NewBlockS,
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,
+      <FONT COLOR=#1E90FF>ICNTxSO</FONT>        => <FONT COLOR=#1E90FF>ICNTxS</FONT>,
+      <FONT COLOR=#1E90FF>ROUNDxSO</FONT>       => <FONT COLOR=#1E90FF>ROUNDxS</FONT>
+      );
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- INITIALIZATION</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  u_initialization : initialization
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>HxDI</FONT> => <FONT COLOR=#804040>InHxD</FONT>,
+      <FONT COLOR=#804040>SxDI</FONT> => <FONT COLOR=#804040>SxDI</FONT>,
+      <FONT COLOR=#804040>TxDI</FONT> => <FONT COLOR=#804040>MsgLenxDI</FONT>,
+      <FONT COLOR=#804040>VxDO</FONT> => <FONT COLOR=#804040>VxD</FONT>
+      );
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- ROUND</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  u_roundreg: roundreg
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>CLKxCI</FONT>   => <FONT COLOR=#32CD32>CLKxCI</FONT>,
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>  => <FONT COLOR=#FF6347>RSTxRBI</FONT>,
+      <FONT COLOR=#1E90FF>WEIxSI</FONT>   => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>,
+      <FONT COLOR=#1E90FF>ICNTxSI</FONT>  => <FONT COLOR=#1E90FF>ICNTxS</FONT>,
+      <FONT COLOR=#1E90FF>ROUNDxSI</FONT> => <FONT COLOR=#1E90FF>ROUNDxS</FONT>,
+      <FONT COLOR=#804040>VxDI</FONT>     => <FONT COLOR=#804040>VxD</FONT>,
+      <FONT COLOR=#804040>MxDI</FONT>     => <FONT COLOR=#804040>MxD</FONT>,
+      <FONT COLOR=#804040>VxDO</FONT>     => <FONT COLOR=#804040>VFINALxD</FONT>
+      );
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- FINALIZATION</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  u_finalization : finalization
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>VxDI</FONT>  => <FONT COLOR=#804040>VFINALxD</FONT>,
+      <FONT COLOR=#804040>HxDI</FONT>  => <FONT COLOR=#804040>HxD</FONT>,
+      <FONT COLOR=#804040>SxDI</FONT>  => <FONT COLOR=#804040>SxDI</FONT>,
+      <FONT COLOR=#804040>HxDO</FONT>  => <FONT COLOR=#804040>OutHxD</FONT>
+      );
+ 
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- </FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>HxDO</FONT>       <= <FONT COLOR=#804040>OutHxD</FONT>;
+  <FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>;
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- </FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>MxDN</FONT>  <= <FONT COLOR=#804040>MxDI</FONT>        <B>when</B> NewBlockS = '1' <B>else</B>
+           <FONT COLOR=#804040>MxDP</FONT>;
+  <FONT COLOR=#804040>InHxD</FONT> <= IV          <B>when</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT> = '1' <B>and</B> NewBlockS = '1' <B>else</B>
+           <FONT COLOR=#804040>OutHxD</FONT>;
+  <FONT COLOR=#804040>HxDN</FONT>  <= IV          <B>when</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT> = '1' <B>and</B> NewBlockS = '1' <B>else</B>
+           <FONT COLOR=#804040>OutHxD</FONT>      <B>when</B> <FONT COLOR=#1E90FF>NewMsgxS</FONT> = '0' <B>and</B> NewBlockS = '1' <B>else</B>
+           <FONT COLOR=#804040>HxDP</FONT>;
+
+  <FONT COLOR=#804040>HxDO</FONT>  <= <FONT COLOR=#804040>OutHxD</FONT>;
+  <FONT COLOR=#804040>HxD</FONT>   <= <FONT COLOR=#804040>HxDP</FONT>;
+  <FONT COLOR=#804040>MxD</FONT>   <= <FONT COLOR=#804040>MxDP</FONT>;
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT>: <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>MxDP</FONT> <= (<B>others</B> => '0');
+      <FONT COLOR=#804040>HxDP</FONT> <= (<B>others</B> => '0');
+    
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>MxDP</FONT> <= <FONT COLOR=#804040>MxDN</FONT>;
+      <FONT COLOR=#804040>HxDP</FONT> <= <FONT COLOR=#804040>HxDN</FONT>;
+      
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+ 
+<B>end</B> top;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

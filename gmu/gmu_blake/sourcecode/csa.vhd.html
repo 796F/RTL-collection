@@ -1,0 +1,47 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/csa.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<I><FONT COLOR=#808080>-- carry save adder </FONT></I>
+
+<B>entity</B> csa <B>is</B> 
+<B>generic</B> (n :integer := 32);
+<B>port</B> (
+	a		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	b		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	cin		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	s		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	cout	: <B>out</B> std_logic_vector(n <B>downto</B> 1));
+<B>end</B> csa;
+
+
+<B>architecture</B> csa <B>of</B> csa <B>is</B> 
+
+<B>begin</B>
+
+<FONT COLOR=#0000C0>csa_instance1</FONT>:	<B>for</B> i <B>in</B> 0 <B>to</B> n-1 <B>generate</B> 
+					cout(i+1) <= (a(i) <B>and</B> b(i)) <B>or</B> (a(i) <B>and</B> cin(i)) <B>or</B> (b(i) <B>and</B> cin(i));
+					s(i) <= a(i) <B>xor</B> b(i) <B>xor</B> cin(i);
+				<B>end</B> <B>generate</B>;
+					
+<B>end</B> csa;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

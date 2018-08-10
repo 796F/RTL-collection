@@ -1,0 +1,45 @@
+<HTML>
+<TITLE>
+ ethz_skein/sourcecode/skeinpkg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>package</B> skeinpkg <B>is</B>
+
+  <B>type</B> HashState <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+  <B>type</B> Key <B>is</B> <B>array</B> (0 <B>to</B> 8) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+  <B>type</B> HashUnsigned <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> unsigned(63 <B>downto</B> 0);
+  <B>type</B> Rot1Arr <B>is</B> <B>array</B> (0 <B>to</B> 3) <B>of</B> integer;
+  <B>type</B> Rot2Arr <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> Rot1Arr;
+
+  <B>constant</B> IV   : Key                           := (X"CCD044A12FDB3E13", X"E83590301A79A9EB", X"55AEA0614F816E6F", X"2A2767A4AE9B94DB", X"EC06025E74DD7683", X"E7A436CDC4746251", X"C36FBAF9393AD185", X"3EEDBA1833EDFC13", X"0000000000000000");
+  <B>constant</B> C240 : std_logic_vector(63 <B>downto</B> 0) := X"1BD11BDAA9FC1A22";
+  <B>constant</B> <FONT COLOR=#1E90FF>RotxS</FONT> : Rot2Arr := ((46, 36, 19, 37),
+                               (33, 27, 14, 42),
+                               (17, 49, 36, 39),
+                               (44, 9, 54, 56),
+                               (39, 30, 34, 24),
+                               (13, 50, 10, 17),
+                               (25, 29, 39, 43),
+                               (8, 35, 56, 22));
+<I><FONT COLOR=#808080>--  constant RotxS : Rot2Arr := ((to_unsigned(46, 8), to_unsigned(36, 8), to_unsigned(19, 8), to_unsigned(37, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(33, 8), to_unsigned(27, 8), to_unsigned(14, 8), to_unsigned(42, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(17, 8), to_unsigned(49, 8), to_unsigned(36, 8), to_unsigned(39, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(44, 8), to_unsigned(9, 8), to_unsigned(54, 8), to_unsigned(56, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(39, 8), to_unsigned(30, 8), to_unsigned(34, 8), to_unsigned(24, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(13, 8), to_unsigned(50, 8), to_unsigned(10, 8), to_unsigned(17, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(25, 8), to_unsigned(29, 8), to_unsigned(39, 8), to_unsigned(43, 8)),</FONT></I>
+<I><FONT COLOR=#808080>--                              (to_unsigned(8, 8), to_unsigned(35, 8), to_unsigned(56, 8), to_unsigned(22, 8)));</FONT></I>
+<B>end</B> skeinpkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

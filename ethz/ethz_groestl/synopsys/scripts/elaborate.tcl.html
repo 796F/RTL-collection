@@ -1,0 +1,27 @@
+<HTML>
+<TITLE>
+ ethz_groestl/synopsys/scripts/elaborate.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># Groestl is faster if we elaborate things separately </FONT></I>
+
+<I><FONT COLOR=#808080># first the sub_bytes</FONT></I>
+<B><FONT COLOR=008000>elaborate</FONT></B> groestl_subbytes
+<B><FONT COLOR=008000>ungroup</FONT></B> <I><FONT COLOR=AA0000>-flatten</FONT></I> <I><FONT COLOR=AA0000>-all</FONT></I>
+
+<B><FONT COLOR=008000>elaborate</FONT></B> groestl_p
+<B><FONT COLOR=008000>ungroup</FONT></B> <I><FONT COLOR=AA0000>-flatten</FONT></I> [get_cells *mix*]
+
+<B><FONT COLOR=008000>elaborate</FONT></B> groestl_q
+<B><FONT COLOR=008000>ungroup</FONT></B> <I><FONT COLOR=AA0000>-flatten</FONT></I> [get_cells *mix*]
+
+<B><FONT COLOR=008000>elaborate</FONT></B> ethz_groestl
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

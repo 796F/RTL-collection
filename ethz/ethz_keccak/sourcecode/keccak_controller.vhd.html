@@ -1,0 +1,138 @@
+<HTML>
+<TITLE>
+ ethz_keccak/sourcecode/keccak_controller.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Keccak</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Schabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : keccak_controller.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-10</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-17</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: FSM for Keccak, original by Pietro Gendotti</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-10  1.0      kgf	Added the BlockDonexSO signal to tell that the</FONT></I>
+<I><FONT COLOR=#808080>--                              computation has reached the last round</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-16  1.1      kgf     FinBlockxSI is now registered it will be</FONT></I>
+<I><FONT COLOR=#808080>--                              sampled at the same time as the InEnxEI</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> keccak_controller <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    INENxEI        : <B>in</B>  std_logic;
+    OUTENxEO       : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>StateSelxSO</FONT>    : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#804040>RcntxDO</FONT>        : <B>out</B> unsigned(4 <B>downto</B> 0));
+
+
+<B>end</B> keccak_controller;
+
+<B>architecture</B> rtl <B>of</B> keccak_controller <B>is</B>
+
+  <B>type</B>   state <B>is</B> (idle, round);
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>StatexDN</FONT> : state;
+  <B>signal</B> <FONT COLOR=#804040>RcntxDP</FONT>, <FONT COLOR=#804040>RcntxDN</FONT>   : unsigned(4 <B>downto</B> 0);
+
+  <I><FONT COLOR=#808080>-- FinBlockxSI is stored until the last cycle</FONT></I>
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSN</FONT> : std_logic;
+
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  <FONT COLOR=#0000C0>p_fsm</FONT>: <B>process</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, INENxEI, <FONT COLOR=#804040>RcntxDP</FONT>, <FONT COLOR=#804040>StatexDP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_fsm</FONT></I>
+
+    <FONT COLOR=#804040>StatexDN</FONT>       <= <FONT COLOR=#804040>StatexDP</FONT>;
+    <FONT COLOR=#804040>RcntxDN</FONT>        <= (<B>others</B> => '0');  <I><FONT COLOR=#808080>-- default sets the round to '0'</FONT></I>
+    <FONT COLOR=#804040>RcntxDO</FONT>        <= <FONT COLOR=#804040>RcntxDP</FONT>;
+    OUTENxEO       <= '0';
+    <FONT COLOR=#1E90FF>StateSelxSO</FONT>    <= '1';
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+    <FONT COLOR=#1E90FF>FinBlockxSN</FONT>    <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT>;
+
+    <B>case</B> <FONT COLOR=#804040>StatexDP</FONT> <B>is</B>
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> idle =>
+
+        <B>if</B> INENxEI = '1' <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT>    <= round;
+          <FONT COLOR=#1E90FF>StateSelxSO</FONT> <= '0';
+          <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;   <I><FONT COLOR=#808080>-- sample the final block input</FONT></I>
+        <B>end</B> <B>if</B>;
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> round =>
+        <FONT COLOR=#1E90FF>StateSelxSO</FONT> <= '1';          
+        <B>if</B> <FONT COLOR=#804040>RcntxDP</FONT> = 22 <B>then</B>       <I><FONT COLOR=#808080>-- notify the output one cycle before end</FONT></I>
+          <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+          <FONT COLOR=#804040>RcntxDN</FONT> <= <FONT COLOR=#804040>RcntxDP</FONT> + 1;
+        <B>elsif</B> <FONT COLOR=#804040>RcntxDP</FONT> = 23 <B>then</B>
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+            OUTENxEO <= '1';
+            <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <='0';          <I><FONT COLOR=#808080>-- clear the final block, we have the output</FONT></I>
+            <B>if</B> INENxEI= '1' <B>then</B>        <I><FONT COLOR=#808080>-- chain directly if possible</FONT></I>
+              <FONT COLOR=#804040>StatexDN</FONT> <= round;
+              <FONT COLOR=#1E90FF>StateSelxSO</FONT> <= '0';
+              <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;  <I><FONT COLOR=#808080>-- sample the final block input</FONT></I>
+            <B>else</B>
+              <FONT COLOR=#804040>StatexDN</FONT> <= idle;
+            <B>end</B> <B>if</B>;
+          <B>else</B>
+            <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;  <I><FONT COLOR=#808080>-- this block is not final, and we</FONT></I>
+                                         <I><FONT COLOR=#808080>-- have a new block that could be final</FONT></I>
+            <FONT COLOR=#804040>StatexDN</FONT> <= round;
+          <B>end</B> <B>if</B>;
+        <B>else</B>
+          <FONT COLOR=#804040>RcntxDN</FONT> <= <FONT COLOR=#804040>RcntxDP</FONT> + 1;
+        <B>end</B> <B>if</B>;
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> <B>others</B> => <FONT COLOR=#804040>StatexDN</FONT> <= idle;
+                     
+    <B>end</B> <B>case</B>;
+    
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_fsm</FONT>;
+
+  <FONT COLOR=#0000C0>p_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= idle;
+      <FONT COLOR=#804040>RcntxDP</FONT>  <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= '0';
+      
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= <FONT COLOR=#804040>StatexDN</FONT>;
+      <FONT COLOR=#804040>RcntxDP</FONT>  <= <FONT COLOR=#804040>RcntxDN</FONT>;
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

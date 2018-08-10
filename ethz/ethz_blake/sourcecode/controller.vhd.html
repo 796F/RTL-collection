@@ -1,0 +1,153 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/controller.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Blake test bench</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : blake_tb.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Beat Muheim  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-15</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-16</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: The test bench for blake, adapted from Keccak</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-15  1.0      bm	Copy from blake_vhdl_v2/sourcecode/1Gcore</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-16  1.1      bm	add PenUltCyclexSO</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> controller <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#32CD32>CLKxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RSTxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>VALIDINxSI</FONT>     : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>    : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>ICNTxSO</FONT>        : <B>out</B> unsigned(3 <B>downto</B> 0);
+    <FONT COLOR=#1E90FF>ROUNDxSO</FONT>       : <B>out</B> unsigned(3 <B>downto</B> 0)
+    );
+
+<B>end</B> controller;
+
+<B>architecture</B> hash <B>of</B> controller <B>is</B>
+
+  <B>type</B> state <B>is</B> (idle, round, fin);
+
+  <B>signal</B> <FONT COLOR=#804040>STATExDP</FONT>, <FONT COLOR=#804040>STATExDN</FONT> : state;
+
+  <B>signal</B> <FONT COLOR=#804040>ROUNDxDP</FONT>, <FONT COLOR=#804040>ROUNDxDN</FONT> : unsigned(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>ICNTxDP</FONT>, <FONT COLOR=#804040>ICNTxDN</FONT>   : unsigned(3 <B>downto</B> 0);
+  
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- hash</FONT></I>
+
+  <FONT COLOR=#1E90FF>ROUNDxSO</FONT> <= <FONT COLOR=#804040>ROUNDxDP</FONT>;
+  <FONT COLOR=#1E90FF>ICNTxSO</FONT>  <= <FONT COLOR=#804040>ICNTxDP</FONT>;
+
+  <FONT COLOR=#0000C0>fsm</FONT>: <B>process</B> (<FONT COLOR=#804040>ICNTxDP</FONT>, <FONT COLOR=#804040>ROUNDxDP</FONT>, <FONT COLOR=#804040>STATExDP</FONT>, <FONT COLOR=#1E90FF>VALIDINxSI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process fsm</FONT></I>
+    
+    <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT> <= '0';
+    
+    <FONT COLOR=#804040>ROUNDxDN</FONT>    <= (<B>others</B> => '0');
+    <FONT COLOR=#804040>ICNTxDN</FONT>     <= (<B>others</B> => '0');
+
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+
+    <B>case</B> <FONT COLOR=#804040>STATExDP</FONT> <B>is</B>
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> idle => 
+
+        <B>if</B> <FONT COLOR=#1E90FF>VALIDINxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>STATExDN</FONT> <= round;
+
+        <B>else</B>
+          <FONT COLOR=#804040>STATExDN</FONT> <= idle;
+          
+        <B>end</B> <B>if</B>;
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> round => 
+
+        <B>if</B> <FONT COLOR=#804040>ROUNDxDP</FONT> < NROUND-1 <B>then</B>
+          <B>if</B> <FONT COLOR=#804040>ICNTxDP</FONT> = 7 <B>then</B>
+            <FONT COLOR=#804040>ROUNDxDN</FONT> <= <FONT COLOR=#804040>ROUNDxDP</FONT> + 1;
+            <FONT COLOR=#804040>STATExDN</FONT> <= round;
+
+          <B>else</B>
+            <FONT COLOR=#804040>ROUNDxDN</FONT> <= <FONT COLOR=#804040>ROUNDxDP</FONT>;
+            <FONT COLOR=#804040>ICNTxDN</FONT>  <= <FONT COLOR=#804040>ICNTxDP</FONT> + 1;
+            <FONT COLOR=#804040>STATExDN</FONT> <= round;
+            
+          <B>end</B> <B>if</B>;
+          
+        <B>else</B>
+          <B>if</B> <FONT COLOR=#804040>ICNTxDP</FONT> = 7 <B>then</B>
+            <FONT COLOR=#804040>STATExDN</FONT> <= fin;
+          <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+
+          <B>else</B>
+            <FONT COLOR=#804040>ROUNDxDN</FONT> <= <FONT COLOR=#804040>ROUNDxDP</FONT>;
+            <FONT COLOR=#804040>ICNTxDN</FONT>  <= <FONT COLOR=#804040>ICNTxDP</FONT> + 1;
+            <FONT COLOR=#804040>STATExDN</FONT> <= round;
+            
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> fin =>
+
+        <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT> <= '1';
+        <FONT COLOR=#804040>STATExDN</FONT>    <= idle;  
+
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> <B>others</B> =>
+
+        <FONT COLOR=#804040>STATExDN</FONT> <= idle;
+      
+    <B>end</B> <B>case</B>;
+    
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>fsm</FONT>;
+  
+  
+  <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>STATExDP</FONT> <= idle;
+      <FONT COLOR=#804040>ROUNDxDP</FONT> <= (<B>others</B> => '0');
+      <FONT COLOR=#804040>ICNTxDP</FONT>  <= (<B>others</B> => '0');
+      
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>STATExDP</FONT> <= <FONT COLOR=#804040>STATExDN</FONT>;
+      <FONT COLOR=#804040>ROUNDxDP</FONT> <= <FONT COLOR=#804040>ROUNDxDN</FONT>;
+      <FONT COLOR=#804040>ICNTxDP</FONT>  <= <FONT COLOR=#804040>ICNTxDN</FONT>;
+        
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B>;
+  
+<B>end</B> hash;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

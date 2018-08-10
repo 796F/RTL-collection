@@ -1,0 +1,58 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/counterna.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;
+						  
+<B>entity</B> counterna <B>is</B>
+	<B>generic</B> ( 	   
+		RST_ACTIVE_VALUE : std_logic := '0';
+		N 	: integer := 2	
+	);
+	<B>port</B> ( 	  
+		clk : <B>in</B> std_logic;
+		rst : <B>in</B> std_logic;
+	    load : <B>in</B> std_logic;
+	    en : <B>in</B> std_logic; 
+        output : <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+	);
+<B>end</B> counterna;
+
+<B>architecture</B> struct <B>of</B> counterna <B>is</B>
+   	<B>signal</B> temp : std_logic_vector(N-1 <B>downto</B> 0);
+<B>begin</B>			
+	<FONT COLOR=#0000C0>gen</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>		
+		<B>if</B> rst = RST_ACTIVE_VALUE <B>then</B>
+			temp <= (<B>others</B> => '0');
+		<B>elsif</B> rising_edge( clk ) <B>then</B>
+			<B>if</B> (load = '1' ) <B>then</B>
+				temp <= (<B>others</B> => '0');
+			<B>elsif</B> ( en = '1' ) <B>then</B>
+				temp <= temp + 1;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>if</B>;				
+	<B>end</B> <B>process</B>;  	
+	output <= temp;
+<B>end</B> struct;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

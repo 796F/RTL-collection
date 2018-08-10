@@ -1,0 +1,85 @@
+<HTML>
+<TITLE>
+ ethz_groestl/modelsim/compile_rtl.pl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /usr/bin/perl -w</FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<B>use</B> <B>strict</B>;
+
+<I><FONT COLOR=#808080># v0.3 - kgf@ee.ethz.ch - Fri Sep  2 10:45:07 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - small  backtick corrections</FONT></I>
+<I><FONT COLOR=#808080># v0.2 - muheim@ee.ethz.ch - Fri Sep  2 10:29:50 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - fix the vcom for simulstuff and _tb.</FONT></I>
+<I><FONT COLOR=#808080># v0.1 - muheim@ee.ethz.ch - Thu Aug 25 09:44:43 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080># - Script for compiling RTL sourcecode taking the list from source.list </FONT></I>
+<I><FONT COLOR=#808080>#   in sourcecode.</FONT></I>
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$VER</FONT></I> = "10.0b";
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$LIB</FONT></I> = "rtl";
+
+
+<I><FONT COLOR=#808080># determine the name of the library</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$name</FONT></I> = `pwd`;
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$name</FONT></I>);
+<I><FONT COLOR=0000FF>$name</FONT></I> =~ s/\/[^\/]+$//;
+<I><FONT COLOR=0000FF>$name</FONT></I> =~ s/^.*\///;
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$ALG</FONT></I>= <I><FONT COLOR=0000FF>$name</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$LOG</FONT></I>= ${ALG}."_compile.log";
+<B><FONT COLOR=AA0000>open</FONT></B> (LOG, ">  <I><FONT COLOR=0000FF>$LOG</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Failed to <B><FONT COLOR=AA0000>open</FONT></B> log file: $!\n";
+
+
+<B>if</B> (-e <I><FONT COLOR=0000FF>$LIB</FONT></I>) {
+  <B><FONT COLOR=AA0000>print</FONT></B> "- Deleting old library [<I><FONT COLOR=0000FF>$LIB</FONT></I>]\n\n";
+  `rm -rf <I><FONT COLOR=0000FF>$LIB</FONT></I>`; 
+}
+
+`vlib-${VER} <I><FONT COLOR=0000FF>$LIB</FONT></I>`;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$date</FONT></I> = `date`;
+<B><FONT COLOR=AA0000>print</FONT></B> LOG "** Compilation of ${ALG} from: <I><FONT COLOR=0000FF>$date</FONT></I>\n";
+
+
+<B><FONT COLOR=AA0000>open</FONT></B> (SCR_LIST,    "< ../sourcecode/source.list") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Failed to <B><FONT COLOR=AA0000>open</FONT></B> file: $!\n";
+
+<B>while</B> (SCR_LIST){
+  <B>if</B> (/(\S+)/){
+    <B><FONT COLOR=AA0000>print</FONT></B>  "- Compile : <I><FONT COLOR=0000FF>$1</FONT></I>\n";
+    <B><FONT COLOR=AA0000>print</FONT></B> LOG `vcom-${VER}  -work <I><FONT COLOR=0000FF>$LIB</FONT></I> -check_synthesis ../sourcecode/<I><FONT COLOR=0000FF>$1</FONT></I>`;
+
+  }
+}
+<B><FONT COLOR=AA0000>print</FONT></B>  "- Compile : simulstuff.vhd\n";
+<B><FONT COLOR=AA0000>print</FONT></B>  "- Compile : ${ALG}_tb.vhd\n";
+<B><FONT COLOR=AA0000>print</FONT></B> LOG `vcom-${VER}  -work <I><FONT COLOR=0000FF>$LIB</FONT></I>  ../sourcecode/simulstuff.vhd`;
+<B><FONT COLOR=AA0000>print</FONT></B> LOG `vcom-${VER}  -work <I><FONT COLOR=0000FF>$LIB</FONT></I>  ../sourcecode/${ALG}_tb.vhd`;
+
+<B><FONT COLOR=AA0000>close</FONT></B> (SCR_LIST);
+<B><FONT COLOR=AA0000>close</FONT></B> (LOG);
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$WarningsC</FONT></I>  = `grep -c "** Warn" ${LOG}`;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$ErrorsC</FONT></I>    = `grep -c "** Err" ${LOG}`;
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$WarningsC</FONT></I>);
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$ErrorsC</FONT></I>);
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$Warnings</FONT></I>   = `grep -i "** Warn" ${LOG}`;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$Errors</FONT></I>     = `grep -i "** Err" ${LOG} | grep -v "Compiler exiting"`;
+
+<B><FONT COLOR=AA0000>print</FONT></B> "\n";
+<B><FONT COLOR=AA0000>print</FONT></B> "- Reporting Warnings: <I><FONT COLOR=0000FF>$WarningsC</FONT></I>\n";
+<B><FONT COLOR=AA0000>print</FONT></B> "<I><FONT COLOR=0000FF>$Warnings</FONT></I>";
+<B><FONT COLOR=AA0000>print</FONT></B> "- Reporting Errors:   <I><FONT COLOR=0000FF>$ErrorsC</FONT></I>\n";
+<B><FONT COLOR=AA0000>print</FONT></B> "<I><FONT COLOR=0000FF>$Errors</FONT></I>";
+<B><FONT COLOR=AA0000>print</FONT></B> "* Done\n";
+
+<B><FONT COLOR=AA0000>print</FONT></B>  "\n    vsim-${VER} -c  -lib  ${LIB}  ${ALG}_tb -do \"run -all; quit\" | tee ../simvectors/${ALG}_sim.rpt\n\n";
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

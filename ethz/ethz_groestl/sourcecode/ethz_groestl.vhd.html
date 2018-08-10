@@ -1,0 +1,282 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/ethz_groestl.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Groestl implementation</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_groestl.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-17</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-05</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Original code from sha3 r2 paper</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-17  1.0      kgf	Created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-02  2.0      kgf     Complete re-write</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-04  2.1      kgf     Corrections</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> ethz_groestl <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#804040>MsgInxDI</FONT>       : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+    <FONT COLOR=#804040>HashOutxDO</FONT>     : <B>out</B> std_logic_vector(255 <B>downto</B> 0));
+
+<B>end</B> ethz_groestl;
+
+<B>architecture</B> rtl <B>of</B> ethz_groestl <B>is</B>
+
+
+  <B>component</B> groestl_p
+    <B>port</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RstxRBI</FONT>       : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>RndxSI</FONT>        : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>SubRndxSI</FONT>     : <B>in</B>  integer range 0 <B>to</B> 7;
+      <FONT COLOR=#804040>InxDI</FONT>         : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+      <FONT COLOR=#804040>OutxDO</FONT>        : <B>out</B> std_logic_vector(511 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> groestl_q
+    <B>port</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RstxRBI</FONT>       : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>RndxSI</FONT>        : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>SubRndxSI</FONT>     : <B>in</B>  integer range 0 <B>to</B> 7;
+      <FONT COLOR=#804040>InxDI</FONT>         : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+      <FONT COLOR=#804040>OutxDO</FONT>        : <B>out</B> std_logic_vector(511 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+<I><FONT COLOR=#808080>-- state</FONT></I>
+  <B>type</B>   statetype <B>is</B> (init, first, round, lastround, final, lastfinal);
+  <B>signal</B> <FONT COLOR=#804040>StatexDN</FONT>, <FONT COLOR=#804040>StatexDP</FONT>       : statetype;
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxSN</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT> : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>UseIVxS</FONT>                  : std_logic;  <I><FONT COLOR=#808080>-- 1: use IV; 0: use Hout</FONT></I>
+  
+<I><FONT COLOR=#808080>-- counters</FONT></I>
+  <B>signal</B> <FONT COLOR=#1E90FF>RndxSN</FONT>, <FONT COLOR=#1E90FF>RndxSP</FONT> : unsigned(3 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- 8 bit representation of the Groestl round 1..11</FONT></I>
+  <B>signal</B> <FONT COLOR=#1E90FF>RndxS</FONT>          : std_logic_vector(7 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#1E90FF>SubRndxS</FONT>       : integer range 0 <B>to</B> 7;  <I><FONT COLOR=#808080>-- each block is completed in 8 cycles;</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>CntxDN</FONT>, <FONT COLOR=#804040>CntxDP</FONT> : unsigned(7 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- The counter</FONT></I>
+  <B>signal</B> <FONT COLOR=#1E90FF>IntCntxS</FONT>       : integer range 0 <B>to</B> 255;  <I><FONT COLOR=#808080>-- Integer version</FONT></I>
+  
+<I><FONT COLOR=#808080>-- interconnect</FONT></I>
+  <B>signal</B>   <FONT COLOR=#804040>HxDN</FONT>, <FONT COLOR=#804040>HxDP</FONT>         : std_logic_vector(511 <B>downto</B> 0);
+  <B>signal</B>   <FONT COLOR=#804040>HinxD</FONT>, <FONT COLOR=#804040>HoutxD</FONT>      : std_logic_vector(511 <B>downto</B> 0);
+  <B>signal</B>   <FONT COLOR=#804040>PxD</FONT>, <FONT COLOR=#804040>QxD</FONT>           : std_logic_vector(511 <B>downto</B> 0);
+  <B>signal</B>   <FONT COLOR=#804040>PinxD</FONT>, <FONT COLOR=#804040>PHxD</FONT>, <FONT COLOR=#804040>PQHxD</FONT> : std_logic_vector(511 <B>downto</B> 0);
+  <B>constant</B> IV                 : std_logic_vector(511 <B>downto</B> 0) := (8 => '1', <B>others</B> => '0');
+
+<I><FONT COLOR=#808080>-- saving power</FONT></I>
+  <B>signal</B> <FONT COLOR=#1E90FF>BlockOutEnxS</FONT> : std_logic;      <I><FONT COLOR=#808080>-- 1:when the output is needed</FONT></I>
+
+  
+<B>begin</B>
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- State Machine</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+ <FONT COLOR=#0000C0>p_fsm</FONT> : <B>process</B> (<FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#804040>CntxDP</FONT>, <FONT COLOR=#1E90FF>IntCntxS</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>)
+ <B>begin</B>  <I><FONT COLOR=#808080>-- process p_fsm</FONT></I>
+   <I><FONT COLOR=#808080>-- defaults</FONT></I>
+   <FONT COLOR=#804040>StatexDN</FONT>       <= <FONT COLOR=#804040>StatexDP</FONT>;
+   <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     <= '0';
+   <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+   <FONT COLOR=#804040>CntxDN</FONT>         <= <FONT COLOR=#804040>CntxDP</FONT> + 1;      <I><FONT COLOR=#808080>-- count by default</FONT></I>
+   <FONT COLOR=#1E90FF>FinBlockxSN</FONT>    <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT>;
+   <FONT COLOR=#1E90FF>UseIVxS</FONT>        <= '0';
+   <FONT COLOR=#1E90FF>BlockOutEnxS</FONT>   <= '0';
+   
+   <B>case</B> <FONT COLOR=#804040>StatexDP</FONT> <B>is</B>
+     <B>when</B> init =>                          <I><FONT COLOR=#808080>-- Use IV</FONT></I>
+       <FONT COLOR=#804040>CntxDN</FONT>  <= (<B>others</B> => '0');
+       <FONT COLOR=#1E90FF>UseIVxS</FONT> <= '1';                     <I><FONT COLOR=#808080>-- Set the IV </FONT></I>
+       <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+         <FONT COLOR=#804040>StatexDN</FONT>    <= round;
+         <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;       <I><FONT COLOR=#808080>-- sample the FinBlockxSI</FONT></I>
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------</FONT></I>
+     <B>when</B> first =>                         <I><FONT COLOR=#808080>-- chain use old value, no IV is set</FONT></I>
+       <FONT COLOR=#804040>CntxDN</FONT> <= (<B>others</B> => '0');
+       <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>             <I><FONT COLOR=#808080>-- wait till we have something</FONT></I>
+         <FONT COLOR=#804040>StatexDN</FONT>    <= round;             <I><FONT COLOR=#808080>-- go to round</FONT></I>
+         <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;       <I><FONT COLOR=#808080>-- sample FinBlockxSI</FONT></I>
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------</FONT></I>
+     <B>when</B> round =>
+       <B>if</B> <FONT COLOR=#1E90FF>IntCntxS</FONT> = 79 <B>then</B>
+         <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>         <I><FONT COLOR=#808080>-- are we finished ?</FONT></I>
+             <FONT COLOR=#804040>StatexDN</FONT> <= final;            <I><FONT COLOR=#808080>-- go to final</FONT></I>
+          <B>else</B>
+             <FONT COLOR=#804040>StatexDN</FONT>       <= lastround;  <I><FONT COLOR=#808080>-- separate state</FONT></I>
+             <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';        <I><FONT COLOR=#808080>-- this is the PenUlt</FONT></I>
+         <B>end</B> <B>if</B>;
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------  </FONT></I>
+     <B>when</B> lastround =>
+       <FONT COLOR=#804040>CntxDN</FONT>       <= (<B>others</B> => '0');    <I><FONT COLOR=#808080>-- reset the counter</FONT></I>
+       <FONT COLOR=#804040>StatexDN</FONT>     <= first;              <I><FONT COLOR=#808080>-- wait for the new input</FONT></I>
+       <FONT COLOR=#1E90FF>BlockOutEnxS</FONT> <= '1';
+       <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>             <I><FONT COLOR=#808080>-- if the new input is here</FONT></I>
+         <FONT COLOR=#804040>StatexDN</FONT>    <= round;             <I><FONT COLOR=#808080>-- jump directly to round</FONT></I>
+         <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;       <I><FONT COLOR=#808080>-- sample FinBlockxSI</FONT></I>
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------  </FONT></I>
+     <B>when</B> final =>
+       <B>if</B> <FONT COLOR=#1E90FF>IntCntxS</FONT> = 159 <B>then</B>              <I><FONT COLOR=#808080>-- penult cycle</FONT></I>
+         <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+         <FONT COLOR=#804040>StatexDN</FONT>       <= lastfinal;      <I><FONT COLOR=#808080>-- go to the last final (160)</FONT></I>
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------</FONT></I>
+     <B>when</B> lastfinal =>
+       <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>   <= '1';                <I><FONT COLOR=#808080>-- set the output</FONT></I>
+       <FONT COLOR=#804040>StatexDN</FONT>     <= init;               <I><FONT COLOR=#808080>-- wait for new input</FONT></I>
+       <FONT COLOR=#804040>CntxDN</FONT>       <= (<B>others</B> => '0');    <I><FONT COLOR=#808080>-- reset the counter</FONT></I>
+       <FONT COLOR=#1E90FF>BlockOutEnxS</FONT> <= '1';
+       <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>             <I><FONT COLOR=#808080>-- if new input is here</FONT></I>
+         <FONT COLOR=#1E90FF>UseIVxS</FONT>     <= '1';               <I><FONT COLOR=#808080>-- Take IV</FONT></I>
+         <FONT COLOR=#804040>StatexDN</FONT>    <= round;             <I><FONT COLOR=#808080>-- continue directly</FONT></I>
+         <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;       <I><FONT COLOR=#808080>-- sample the FinBlockxSI</FONT></I>
+       <B>end</B> <B>if</B>;
+     <I><FONT COLOR=#808080>--------------------------------------------------------------------------</FONT></I>
+     <B>when</B> <B>others</B> => null;
+   <B>end</B> <B>case</B>;
+
+   
+ <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_fsm</FONT>;
+
+  
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Derive the counters</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#1E90FF>SubRndxS</FONT> <= to_integer(<FONT COLOR=#804040>CntxDP</FONT>(2 <B>downto</B> 0));
+  <FONT COLOR=#1E90FF>RndxS</FONT>    <= "0000" & std_logic_vector(<FONT COLOR=#1E90FF>RndxSP</FONT>);
+  <FONT COLOR=#1E90FF>IntCntxS</FONT> <= to_integer(unsigned(<FONT COLOR=#804040>CntxDP</FONT>));
+
+  <I><FONT COLOR=#808080>-- The round counter needs to be determined depending on</FONT></I>
+  <I><FONT COLOR=#808080>-- whether or not we are in the final round</FONT></I>
+  <FONT COLOR=#0000C0>p_cnt</FONT>: <B>process</B> (<FONT COLOR=#1E90FF>RndxSP</FONT>, <FONT COLOR=#1E90FF>IntCntxS</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_cnt</FONT></I>
+    <FONT COLOR=#1E90FF>RndxSN</FONT> <= <FONT COLOR=#1E90FF>RndxSP</FONT>;
+    <B>if</B> (<FONT COLOR=#1E90FF>IntCntxS</FONT> = 79) <B>then</B>
+      <FONT COLOR=#1E90FF>RndxSN</FONT> <= (<B>others</B> => '0');
+    <B>elsif</B> (<FONT COLOR=#1E90FF>IntCntxS</FONT> = 159) <B>then</B>
+      <FONT COLOR=#1E90FF>RndxSN</FONT> <=  (<B>others</B> => '0');  
+    <B>elsif</B> (<FONT COLOR=#1E90FF>IntCntxS</FONT> mod 8 = 7) <B>then</B>
+      <FONT COLOR=#1E90FF>RndxSN</FONT> <= <FONT COLOR=#1E90FF>RndxSP</FONT> + 1;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_cnt</FONT>;
+ 
+
+
+
+ 
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Interconnections</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#804040>HinxD</FONT> <= IV <B>when</B> <FONT COLOR=#1E90FF>UseIVxS</FONT> = '1'  <B>else</B> <FONT COLOR=#804040>HoutxD</FONT>;  <I><FONT COLOR=#808080>-- add IV in the first round</FONT></I>
+
+
+  <FONT COLOR=#804040>PinxD</FONT> <= <FONT COLOR=#804040>HxDN</FONT> <B>when</B> <FONT COLOR=#804040>StatexDP</FONT> = final <B>else</B> <FONT COLOR=#804040>MsgInxDI</FONT> <B>xor</B> <FONT COLOR=#804040>HxDN</FONT>;          <I><FONT COLOR=#808080>-- input of P</FONT></I>
+
+
+ 
+  <FONT COLOR=#0000C0>p_storeH</FONT> : <B>process</B> (<FONT COLOR=#804040>HxDP</FONT>, <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>HinxD</FONT>, <FONT COLOR=#1E90FF>IntCntxS</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_storeH</FONT></I>
+    <FONT COLOR=#804040>HxDN</FONT> <= <FONT COLOR=#804040>HxDP</FONT>;                       <I><FONT COLOR=#808080>-- keep H value constant</FONT></I>
+    <B>if</B> <FONT COLOR=#1E90FF>IntCntxS</FONT> = 80 <B>then</B>
+      <FONT COLOR=#804040>HxDN</FONT> <= <FONT COLOR=#804040>HinxD</FONT>;                    <I><FONT COLOR=#808080>-- end of the block</FONT></I>
+    <B>elsif</B> <FONT COLOR=#1E90FF>IntCntxS</FONT> = 160 <B>then</B>           <I><FONT COLOR=#808080>-- technically also at 159..</FONT></I>
+      <FONT COLOR=#804040>HxDN</FONT> <= <FONT COLOR=#804040>HinxD</FONT>;                    <I><FONT COLOR=#808080>-- end of final</FONT></I>
+    <B>elsif</B> <FONT COLOR=#804040>StatexDP</FONT> = init <B>then</B>          <I><FONT COLOR=#808080>-- change at Init (IV)</FONT></I>
+      <FONT COLOR=#804040>HxDN</FONT> <= <FONT COLOR=#804040>HinxD</FONT>;                    <I><FONT COLOR=#808080>-- Sample the output</FONT></I>
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_storeH</FONT>;
+
+  <FONT COLOR=#804040>PHxD</FONT>  <= <FONT COLOR=#804040>PxD</FONT> <B>xor</B> <FONT COLOR=#804040>HxDP</FONT>;                <I><FONT COLOR=#808080>-- XOR the output with H</FONT></I>
+  <FONT COLOR=#804040>PQHxD</FONT> <= <FONT COLOR=#804040>PHxD</FONT> <B>xor</B> <FONT COLOR=#804040>QxD</FONT>;                <I><FONT COLOR=#808080>-- XOR P H and Q</FONT></I>
+
+  <FONT COLOR=#804040>HoutxD</FONT> <= <FONT COLOR=#804040>PQHxD</FONT> <B>when</B>  <FONT COLOR=#1E90FF>IntCntxS</FONT> = 80 <B>else</B> <FONT COLOR=#804040>PHxD</FONT>;  <I><FONT COLOR=#808080>-- on round 80 we will sample</FONT></I>
+                                                  <I><FONT COLOR=#808080>-- P xor Q xor H</FONT></I>
+
+  <FONT COLOR=#804040>HashOutxDO</FONT> <= <FONT COLOR=#804040>HoutxD</FONT>(255 <B>downto</B> 0);   <I><FONT COLOR=#808080>-- take the LSB</FONT></I>
+ 
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Instantiate P and Q </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+  i_p : groestl_p
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>        => <FONT COLOR=#32CD32>ClkxCI</FONT>,
+      <FONT COLOR=#FF6347>RstxRBI</FONT>       => <FONT COLOR=#FF6347>RstxRBI</FONT>,
+      <FONT COLOR=#1E90FF>RndxSI</FONT>        => <FONT COLOR=#1E90FF>RndxS</FONT>,
+      <FONT COLOR=#1E90FF>SubRndxSI</FONT>     => <FONT COLOR=#1E90FF>SubRndxS</FONT>,
+      <FONT COLOR=#804040>InxDI</FONT>         => <FONT COLOR=#804040>PinxD</FONT>,
+      <FONT COLOR=#804040>OutxDO</FONT>        => <FONT COLOR=#804040>PxD</FONT>);
+
+  i_q : groestl_q
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>        => <FONT COLOR=#32CD32>ClkxCI</FONT>,
+      <FONT COLOR=#FF6347>RstxRBI</FONT>       => <FONT COLOR=#FF6347>RstxRBI</FONT>,
+      <FONT COLOR=#1E90FF>RndxSI</FONT>        => <FONT COLOR=#1E90FF>RndxS</FONT>,
+      <FONT COLOR=#1E90FF>SubRndxSI</FONT>     => <FONT COLOR=#1E90FF>SubRndxS</FONT>,
+      <FONT COLOR=#804040>InxDI</FONT>         => <FONT COLOR=#804040>MsgInxDI</FONT>,
+      <FONT COLOR=#804040>OutxDO</FONT>        => <FONT COLOR=#804040>QxD</FONT>);
+
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Memory</FONT></I>
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_mem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT>    <= init;
+      <FONT COLOR=#804040>CntxDP</FONT>      <= (<B>others</B> => '0');
+      <FONT COLOR=#804040>HxDP</FONT>        <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= '0';
+      <FONT COLOR=#1E90FF>RndxSP</FONT>      <= (<B>others</B> => '0');
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT>    <= <FONT COLOR=#804040>StatexDN</FONT>;
+      <FONT COLOR=#804040>CntxDP</FONT>      <= <FONT COLOR=#804040>CntxDN</FONT>;
+      <FONT COLOR=#804040>HxDP</FONT>        <= <FONT COLOR=#804040>HxDN</FONT>;
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSN</FONT>;
+      <FONT COLOR=#1E90FF>RndxSP</FONT>      <= <FONT COLOR=#1E90FF>RndxSN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+
+
+  
+<B>end</B> rtl;
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

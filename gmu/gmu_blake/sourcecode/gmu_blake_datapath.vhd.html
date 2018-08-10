@@ -1,0 +1,142 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/gmu_blake_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+
+<B>use</B> work.sha3_blake_package.ALL;
+<B>use</B> work.sha3_pkg.all;
+
+<B>entity</B> gmu_blake_datapath <B>is</B>	 	
+	<B>generic</B> (	  	   
+		b : integer := 512;
+		iw : integer := 32;
+		h : integer := 256;
+		ADDER_TYPE : integer := SCCA_BASED);
+	<B>port</B> (
+		<I><FONT COLOR=#808080>-- external</FONT></I>
+		clk : <B>in</B> std_logic;
+		rst : <B>in</B> std_logic;
+		
+		din  : <B>in</B> std_logic_vector(b-1 <B>downto</B> 0);	
+		t	 : <B>in</B> std_logic_vector(iw*2-1 <B>downto</B> 0);
+		dout : <B>out</B> std_logic_vector(h-1 <B>downto</B> 0);	
+	
+		<I><FONT COLOR=#808080>--fsm 2			  		</FONT></I>
+		round : <B>in</B> std_logic_vector(4 <B>downto</B> 0);	
+		em : <B>in</B> std_logic;
+		lm : <B>in</B> std_logic;
+		eh : <B>in</B> std_logic;											
+		er : <B>in</B> std_logic;		
+		sf : <B>in</B> std_logic
+	);				  
+<B>end</B> gmu_blake_datapath;
+
+<B>architecture</B> struct <B>of</B> gmu_blake_datapath <B>is</B>   
+	<B>constant</B> mw 			: integer := b;		 
+	<B>constant</B> log2b			: integer := log2( b );
+	<B>constant</B> log2bzeros		: std_logic_vector(log2b-1 <B>downto</B> 0) := (<B>others</B> => '0');	
+	<B>constant</B> bzeros			: std_logic_vector(b-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> bhalfzeros		: std_logic_vector(b/2-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<I><FONT COLOR=#808080>-------------</FONT></I>
+
+	<B>constant</B> iv : std_logic_vector(b/2-1 <B>downto</B> 0) := get_iv( h, iw );
+	<B>signal</B> hinit,rdprime, rmux : std_logic_vector(b/2 - 1 <B>downto</B> 0);
+	<B>signal</B> rinit, rin, r, rprime : std_logic_vector(b-1 <B>downto</B> 0);	
+	<B>signal</B> m : std_logic_vector(b-1 <B>downto</B> 0);
+		
+	<B>constant</B> cons : std_logic_vector(b-1 <B>downto</B> 0) := get_cons( h, b, iw );
+1 <B>downto</B> 0);  			  <I><FONT COLOR=#808080>-- 8 = b size, 4 = b/2 size</FONT></I>
+
+	<B>type</B> std_logic_matrix <B>is</B> <B>array</B> (natural range <>) <B>of</B> std_logic_vector(iw - 1 <B>downto</B> 0) ;
+	<B>function</B> wordmatrix2blk  	(x : std_logic_matrix) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> retval : std_logic_vector(b-1 <B>downto</B> 0);
+	<B>begin</B>
+		<B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>loop</B>
+			retval(iw*(i+1) - 1 <B>downto</B> iw*i) := x(15-i);
+		<B>end</B> <B>loop</B>;
+		<B>return</B> retval;
+	<B>end</B> wordmatrix2blk;
+	<B>function</B> blk2wordmatrix  	(x : std_logic_vector; blksize : integer ) <B>return</B> std_logic_matrix <B>is</B>
+		<B>variable</B> retval : std_logic_matrix(0 <B>to</B> blksize-1);
+	<B>begin</B>
+		<B>for</B> i <B>in</B> 0 <B>to</B> blksize-1 <B>loop</B>
+			retval(blksize-1-i) := x(iw*(i+1) - 1 <B>downto</B> iw*i);
+		<B>end</B> <B>loop</B>;
+		<B>return</B> retval;
+	<B>end</B> blk2wordmatrix;	
+		
+	<B>signal</B> v1, v2, v2_perm, v2_revert, v3 : std_logic_matrix( 0 <B>to</B> 15 ); 
+	<B>signal</B> cp : std_logic_matrix(0 <B>to</B> 7);	 
+	
+	<B>type</B> bot_permute_type <B>is</B> <B>array</B> ( 0 <B>to</B> 15 ) <B>of</B> integer;
+	<B>constant</B> bot_permute : bot_permute_type := ( 0,1,2,3,5,6,7,4,10,11,8,9,15,12,13,14 );
+	
+	<B>signal</B> treg : std_logic_vector(iw*2-1 <B>downto</B> 0);
+	<I><FONT COLOR=#808080>-- debug			  </FONT></I>
+	<B>signal</B> rinit_m, r_m, r_v21, r_v22, r_r : std_logic_matrix(0 <B>to</B> 15);	
+<B>begin</B>		
+	<I><FONT COLOR=#808080>-- debug</FONT></I>
+	rinit_m <= blk2wordmatrix( rin, 16 );		 
+	r_m <= blk2wordmatrix( m, 16 );	
+	r_v21 <= blk2wordmatrix( wordmatrix2blk(v2_perm), 16 );	
+	r_v22 <= blk2wordmatrix( wordmatrix2blk(v2_revert), 16 );	
+	r_r <= blk2wordmatrix( r, 16 );	
+	
+	mregInst : regna <B>generic</B> <B>map</B> (n => b, INIT => bzeros) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => lm, input => din, output => m );	
+	tregInst : regna <B>generic</B> <B>map</B> (n => 2*iw, INIT => bzeros(2*iw-1 <B>downto</B> 0)) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => lm, input => t, output => treg );
+
+	rmux <= iv <B>when</B> sf = '1' <B>else</B> rdprime;
+	rinit <= rmux &  cons(b-1 <B>downto</B> b-iw*4)  & 
+			(treg(iw-1 <B>downto</B> 0) <B>xor</B> cons(b-1-iw*4 <B>downto</B> b-iw*5)) &  (treg(iw-1 <B>downto</B> 0) <B>xor</B> cons(b-iw*5-1 <B>downto</B> b-iw*6)) &
+			(treg(2*iw-1 <B>downto</B> iw) <B>xor</B> cons(b-1-iw*6 <B>downto</B> b-iw*7))  & (treg(2*iw-1 <B>downto</B> iw) <B>xor</B> cons(b-iw*7-1 <B>downto</B> b-iw*8));		
+	hreg_gen : regna <B>generic</B> <B>map</B> ( N => b/2, init => bhalfzeros ) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => eh, input => rmux, output => hinit );	
+	
+	rin <= rinit <B>when</B> (eh = '1') <B>else</B> rprime;
+	r_gen : regna <B>generic</B> <B>map</B> ( N => b, init => bzeros ) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => er, input => rin, output => r );		
+		
+	v1 <= blk2wordmatrix(r, 16);
+	perm4_gen : <B>entity</B> work.permute4xor(muxbased) 
+		<B>generic</B> <B>map</B> (h => h, b => b, iw => iw) 
+		<B>port</B> <B>map</B> ( clk => clk, em => eh, m => m, round => round, consout => consout );
+	
+	consregInst : regna <B>generic</B> <B>map</B> (n => b/2, INIT => bzeros(b/2-1 <B>downto</B> 0)) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => '1', input => consout, output => consreg ); 
+	cp <= blk2wordmatrix(consreg, 8);
+	<FONT COLOR=#0000C0>glvl1</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+		g0123 : <B>entity</B> work.gfunc_modified(struct) 	<B>generic</B> <B>map</B> ( iw => iw, h => h, ADDER_TYPE => ADDER_TYPE )
+			<B>port</B> <B>map</B> ( 	ain => v1(i), bin => v1(i+4), cin => v1(i+8), din => v1(i+12), <I><FONT COLOR=#808080>-- state in</FONT></I>
+				  		const_0 => cp(2*i), const_1 => cp(2*i + 1), <I><FONT COLOR=#808080>-- constant in</FONT></I>
+					 	aout =>  v2(i), bout => v2(i+4), cout=> v2(i+8),dout => v2(i+12)); <I><FONT COLOR=#808080>-- state out</FONT></I>
+	<B>end</B> <B>generate</B>;
+	
+	<FONT COLOR=#0000C0>v2_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>generate</B>
+		v2_perm( bot_permute(i) ) <= v2( i ); 
+		v2_revert( i ) <= v2( bot_permute(i) );
+	<B>end</B> <B>generate</B>;
+	
+	<I><FONT COLOR=#808080>--v3 when round(0) = '1' else v2_revert;		</FONT></I>
+	v3 <= v2_perm <B>when</B> round(0) = '0' <B>else</B> v2_revert;		
+	rprime <= wordmatrix2blk(v3);			
+	<I><FONT COLOR=#808080>--finalization				</FONT></I>
+	rdprime <= hinit <B>xor</B> r(b-1 <B>downto</B> b/2) <B>xor</B> r(b/2-1 <B>downto</B> 0);
+	dout <= rdprime;
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

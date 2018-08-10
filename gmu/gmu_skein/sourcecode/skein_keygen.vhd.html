@@ -1,0 +1,124 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/skein_keygen.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_skein_package.all;
+
+<B>entity</B> skein_keygen <B>is</B>	
+	<B>generic</B> ( 	version : integer := SHA3_ROUND3;
+				adder_type : integer := SCCA_BASED;
+				b : integer := 512; 
+				nw : integer := 8);
+	<B>port</B> (					
+		clk		: <B>in</B> std_logic;	
+		rst		: <B>in</B> std_logic;
+		load	: <B>in</B> std_logic;
+		en		: <B>in</B> std_logic;
+		keyin	: <B>in</B> std_logic_vector(b-1 <B>downto</B> 0);
+		tweak 	: <B>in</B> std_logic_vector(127 <B>downto</B> 0);
+		keyout	: <B>out</B> key_array(nw-1 <B>downto</B> 0)
+	);
+<B>end</B> skein_keygen;
+		
+<B>architecture</B> struct <B>of</B> skein_keygen <B>is</B>
+	<I><FONT COLOR=#808080>-- tweak															   </FONT></I>
+	<B>type</B> tweak_type <B>is</B> <B>array</B> (2 <B>downto</B> 0) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	<B>type</B> tweak_array <B>is</B> <B>array</B> (1 <B>downto</B> 0, 2 <B>downto</B> 0) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	<B>signal</B> tw_iv, tw_reg : tweak_type;
+	<B>signal</B> tw : tweak_array;
+				
+	<B>type</B> key_type1 <B>is</B> <B>array</B>(nw <B>downto</B> 1) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	<B>signal</B> key_reg : key_type1;	 
+	
+3); <I><FONT COLOR=#808080>-- only the first 3 arrays need dedicated resource</FONT></I>
+	<B>signal</B> key 	: key_array(nw <B>downto</B> 0);
+	<B>signal</B> parkey   : key_array(nw-1 <B>downto</B> 0);
+		
+	<I><FONT COLOR=#808080>-- sub key counter	</FONT></I>
+	<B>signal</B> s_out : std_logic_vector(6 <B>downto</B> 0);
+	<B>type</B> subkey_array <B>is</B> <B>array</B>(1 <B>downto</B> 0) <B>of</B> std_logic_vector(6 <B>downto</B> 0);
+	<B>signal</B> s : subkey_array;													   
+	
+	<B>constant</B> key_const : std_logic_vector(63 <B>downto</B> 0) := get_key_const( version );
+<B>begin</B>					  
+	<I><FONT COLOR=#808080>----------------------</FONT></I>
+	<I><FONT COLOR=#808080>-- s gen </FONT></I>
+	s(0) <= "0000000" <B>when</B> load = '1' <B>else</B> s_out;
+	s_reg_gen : regna <B>generic</B> <B>map</B> ( N => 7, init => "0000000" ) <B>port</B> <B>map</B> (clk => clk, rst => rst, en => en, input => s(1), output => s_out );
+	add_call : adder <B>generic</B> <B>map</B> ( adder_type => adder_type, n => 7 ) <B>port</B> <B>map</B> ( a => s(0), b => conv_std_logic_vector(1,7), s => s(1));	
+	
+	<I><FONT COLOR=#808080>----------------------</FONT></I>
+	<I><FONT COLOR=#808080>-- tweak</FONT></I>
+		<I><FONT COLOR=#808080>--tweak init	   </FONT></I>
+	tw_iv(2) <= tweak(127 <B>downto</B> 64) <B>xor</B> tweak(63 <B>downto</B> 0);
+	tw_iv(1) <= tweak(127 <B>downto</B> 64);
+	tw_iv(0) <= tweak(63 <B>downto</B> 0);
+	
+		<I><FONT COLOR=#808080>--</FONT></I>
+	tw(0,0) <= tw_iv(0) <B>when</B> load = '1' <B>else</B> tw_reg(0);
+	tw(0,1) <= tw_iv(1) <B>when</B> load = '1' <B>else</B> tw_reg(1);
+	tw(0,2) <= tw_iv(2) <B>when</B> load = '1' <B>else</B> tw_reg(2);
+	
+
+	tw(1,0) <= tw(0,1);
+	tw(1,1) <= tw(0,2);
+	tw(1,2) <= tw(0,0);
+	
+	
+	<FONT COLOR=#0000C0>tw_regs_gen</FONT> : <B>for</B> i <B>in</B> 2 <B>downto</B> 0 <B>generate</B>
+		tw_reg_gen : regna <B>generic</B> <B>map</B> ( N => iw, init => iwzeros ) <B>port</B> <B>map</B> ( clk => clk, rst => rst, en => en, input => tw(1,i), output => tw_reg(i) );
+	<B>end</B> <B>generate</B>;	
+	
+	<I><FONT COLOR=#808080>----------------------</FONT></I>
+	<I><FONT COLOR=#808080>-- key</FONT></I>
+	<FONT COLOR=#0000C0>key_gen</FONT> : <B>for</B> i <B>in</B> nw-1 <B>downto</B> 0 <B>generate</B>
+		key(i) <= keyin(iw*i+iw-1 <B>downto</B> i*iw) <B>when</B> load = '1' <B>else</B> key_reg(i+1);
+	<B>end</B> <B>generate</B>;
+	key(nw) <= parkey(nw-1) <B>xor</B> key_const;	
+
+	parkey(0) <= key(0);
+	<FONT COLOR=#0000C0>parkey_gen2</FONT> : <B>for</B> j <B>in</B> 1 <B>to</B> nw-1 <B>generate</B>
+		parkey(j) <= key(j) <B>xor</B> parkey(j-1);
+	<B>end</B> <B>generate</B>;
+	
+	<I><FONT COLOR=#808080>-- gen key out</FONT></I>
+	key_out_in(nw-1) <= key(nw-1) + s(0);
+	add_call2 : adder <B>generic</B> <B>map</B> ( adder_type => adder_type, n => 64 ) <B>port</B> <B>map</B> ( a => key(nw-2), b => tw(0,1), s => key_out_in(nw-2));
+	add_call3 : adder <B>generic</B> <B>map</B> ( adder_type => adder_type, n => 64 ) <B>port</B> <B>map</B> ( a => key(nw-3), b => tw(0,0), s => key_out_in(nw-3));
+	
+	<FONT COLOR=#0000C0>reggen_keyreg</FONT> : <B>for</B> j <B>in</B> nw <B>downto</B> 1 <B>generate</B>
+		key_reg_gen : regna <B>generic</B> <B>map</B> ( N => iw, init => iwzeros ) <B>port</B> <B>map</B> ( clk => clk, rst => rst, en => en, input => key(j), output => key_reg(j) );
+	<B>end</B> <B>generate</B>;
+			
+	<I><FONT COLOR=#808080>-- Register the output of the keyout</FONT></I>
+	<FONT COLOR=#0000C0>keyout_reg2</FONT> : <B>for</B> j <B>in</B> nw-1 <B>downto</B> nw-3 <B>generate</B>
+		key_out_gen : regna <B>generic</B> <B>map</B> ( N => iw, init => iwzeros ) <B>port</B> <B>map</B> ( clk => clk, rst => rst, en => en, input => key_out_in(j), output => keyout(j) );
+	<B>end</B> <B>generate</B>;
+	keyout(4) <= key_reg(4);
+	keyout(3) <= key_reg(3);
+	keyout(2) <= key_reg(2);
+	keyout(1) <= key_reg(1);
+	key_out_gen0 : regna <B>generic</B> <B>map</B> ( N => iw, init => iwzeros ) <B>port</B> <B>map</B> ( clk => clk, rst => rst, en => en, input => key(0), output => keyout(0) );
+	
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,47 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/skein_mix_4r.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_skein_package.all;
+
+<B>entity</B> skein_mix_4r <B>is</B>		
+	<B>generic</B> ( adder_type : integer := SCCA_BASED;
+			  rotate_0 : integer := 0; 
+			  rotate_1 : integer := 1 );
+	<B>port</B> ( 							 
+		sel : <B>in</B> std_logic;
+		a : <B>in</B> std_logic_vector(iw-1 <B>downto</B> 0);
+		b : <B>in</B> std_logic_vector(iw-1 <B>downto</B> 0);
+		c, d : <B>out</B> std_logic_vector(iw-1 <B>downto</B> 0) 
+	);
+<B>end</B> skein_mix_4r;
+
+<B>architecture</B> struct <B>of</B> skein_mix_4r <B>is</B>
+	<B>signal</B> temp : std_logic_vector(iw-1 <B>downto</B> 0);	  
+	<B>signal</B> b_rotate :  std_logic_vector(iw-1 <B>downto</B> 0);
+<B>begin</B>
+	add_call1 : adder <B>generic</B> <B>map</B> ( adder_type => adder_type, n => 64 ) <B>port</B> <B>map</B> ( a => a, b => b, s => temp);
+	c <= temp;			
+	b_rotate <= rolx(b,rotate_0) <B>when</B> sel = '0' <B>else</B> rolx(b,rotate_1);
+	d <= b_rotate <B>xor</B> temp;
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

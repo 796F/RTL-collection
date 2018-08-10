@@ -1,0 +1,260 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/permute.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================															  </FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;	   
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> ieee.std_logic_arith.all;
+<B>use</B> work.sha3_blake_package.all;
+            
+<B>entity</B> permute4xor <B>is</B>
+	<B>generic</B> ( 
+	h : integer := 256;
+	b : integer := 512;	
+	iw : integer := 32 );
+	<B>port</B>(		
+		clk 		: <B>in</B> std_logic;		
+		m			:	<B>in</B> std_logic_vector(b-1 <B>downto</B> 0);
+		em			: <B>in</B> std_logic;
+		round		:	<B>in</B> std_logic_vector(4 <B>downto</B> 0);
+		consout		:	<B>out</B> std_logic_vector(b/2-1 <B>downto</B> 0)
+	);
+<B>end</B> permute4xor;	
+
+<B>architecture</B> muxbased <B>of</B> permute4xor <B>is</B>	 
+	<B>type</B> std_logic_matrix <B>is</B> <B>array</B> (15 <B>downto</B> 0) <B>of</B> std_logic_vector(iw - 1 <B>downto</B> 0) ;
+	<B>type</B> std_logic_half_matrix <B>is</B> <B>array</B> (7 <B>downto</B> 0) <B>of</B> std_logic_vector(iw - 1 <B>downto</B> 0) ;
+	<I><FONT COLOR=#808080>--------------------------</FONT></I>
+	<B>function</B> wordmatrix2halfblk  	(x : std_logic_half_matrix) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> retval : std_logic_vector(b/2-1 <B>downto</B> 0);
+	<B>begin</B>
+		<B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+			retval(iw*(i+1) - 1 <B>downto</B> iw*i) := x(7-i);
+		<B>end</B> <B>loop</B>;
+		<B>return</B> retval;
+	<B>end</B> wordmatrix2halfblk;
+	<I><FONT COLOR=#808080>--------------------------</FONT></I>
+	<B>function</B> blk2wordmatrix  	(x : std_logic_vector ) <B>return</B> std_logic_matrix <B>is</B>
+		<B>variable</B> retval : std_logic_matrix;
+	<B>begin</B>
+		<B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>loop</B>
+			retval(15-i) := x(iw*(i+1) - 1 <B>downto</B> iw*i);
+		<B>end</B> <B>loop</B>;
+		<B>return</B> retval;
+	<B>end</B> blk2wordmatrix;
+	<I><FONT COLOR=#808080>-------------------------- </FONT></I>
+	
+	<B>signal</B> mblk : std_logic_matrix;	
+	<B>signal</B> minblkprime : std_logic_half_matrix;
+
+	<B>type</B> block_array <B>is</B> <B>array</B>(0 <B>to</B> 19) <B>of</B> std_logic_half_matrix;
+	<B>signal</B> mblkprime : block_array; 
+	
+	<B>signal</B> round_sel : std_logic_vector(4 <B>downto</B> 0);   
+	
+	<B>signal</B> mprime_tmp, consprime_tmp, consout_tmp : std_logic_half_matrix;	
+	
+	<B>function</B> get_halfmatrixzero <B>return</B> std_logic_half_matrix <B>is</B>
+		<B>variable</B> ret : std_logic_half_matrix;
+	<B>begin</B>
+		<B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+			ret(0) := (<B>others</B> => '0');
+		<B>end</B> <B>loop</B>;
+		<B>return</B> ret;
+	<B>end</B> <B>function</B> <FONT COLOR=#0000C0>get_halfmatrixzero</FONT>;  
+	<B>constant</B> zero : std_logic_half_matrix := get_halfmatrixzero;
+	<I><FONT COLOR=#808080>--------------------------								   </FONT></I>
+	<B>constant</B> consin : std_logic_vector(b-1 <B>downto</B> 0) := get_cons( h, b, iw );
+	<B>function</B> get_cp ( gsize : integer; iw : integer ) <B>return</B> block_array <B>is</B>
+		<B>variable</B> cblk : std_logic_matrix;   									   		
+		<B>variable</B> cpblk : block_array;	   
+								  
+	<B>begin</B>							   
+		<B>for</B> i <B>in</B> 0 <B>to</B> 15 <B>loop</B>
+			cblk(15-i) := consin(iw*(i+1) - 1 <B>downto</B> iw*i);
+		<B>end</B> <B>loop</B>;
+		<B>for</B> i <B>in</B> 0 <B>to</B> 9 <B>loop</B>
+			<B>for</B> j <B>in</B> 0 <B>to</B> 16/(8/gsize)-1 <B>loop</B>
+				cpblk(2*i)(j) 	:= cblk( permute_array( i, j ) );
+				cpblk(2*i+1)(j) := cblk( permute_array( i, j+8 ) );
+			<B>end</B> <B>loop</B>;
+		<B>end</B> <B>loop</B>;		
+		<B>return</B> cpblk;
+	<B>end</B> <B>function</B> <FONT COLOR=#0000C0>get_cp</FONT>;		
+	<I><FONT COLOR=#808080>------------------------------</FONT></I>
+	
+	<B>constant</B> consblkprime : block_array := get_cp( 4, iw );	  
+<B>begin</B>		
+	mblk <= blk2wordmatrix( m );
+	
+	<FONT COLOR=#0000C0>ret1_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 9 <B>generate</B>
+		<FONT COLOR=#0000C0>ret2_gen</FONT> : <B>for</B> j <B>in</B> 0 <B>to</B> 7 <B>generate</B>	 	
+			mblkprime(2*i)(j) 		<= mblk( permute_array( i, j ) );
+			mblkprime(2*i+1)(j) 	<= mblk( permute_array( i, j+8 ) );
+		<B>end</B> <B>generate</B>;
+	<B>end</B> <B>generate</B>; 
+
+<I><FONT COLOR=#808080>--	round_sel when em = '1' else round;	</FONT></I>
+<I><FONT COLOR=#808080>--	with round_sel select </FONT></I>
+<I><FONT COLOR=#808080>--	mprime_tmp	 when "00000",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(2)  	when "00001",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(3)  	when "00010",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(4)  	when "00011",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(5)  	when "00100",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(6)  	when "00101",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(7)  	when "00110",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(8)  	when "00111",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(9)  	when "01000",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(10)  when "01001",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(11)  when "01010",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(12)  when "01011",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(13)  when "01100",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(14)  when "01101",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(15)  when "01110",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(16)  when "01111",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(17)  when "10000",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(18)  when "10001",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(19)  when "10010",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(0)   when "10011",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(1)   when "10100",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(2)   when "10101",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(3)   when "10110",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(4)   when "10111",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(5)   when "11000",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(6)   when "11001",	</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(7)   when "11010",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(8)  	when "11011",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(9)  	when "11100",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(10)  	when "11101",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(11) 	when "11110",</FONT></I>
+<I><FONT COLOR=#808080>--						mblkprime(12) 	when "11111",						</FONT></I>
+<I><FONT COLOR=#808080>--						zero when  others ;</FONT></I>
+<I><FONT COLOR=#808080>--	</FONT></I>
+<I><FONT COLOR=#808080>--	with round_sel select </FONT></I>
+<I><FONT COLOR=#808080>--	consprime_tmp	 when "00000",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(2)  	when "00001",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(3)  	when "00010",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(4)  	when "00011",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(5)  	when "00100",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(6) 	when "00101",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(7)  	when "00110",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(8)  	when "00111",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(9)  	when "01000",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(10)  	when "01001",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(11)  	when "01010",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(12)  	when "01011",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(13)  	when "01100",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(14)  	when "01101",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(15)  	when "01110",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(16)  	when "01111",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(17)  	when "10000",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(18)  	when "10001",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(19)  	when "10010",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(0)   	when "10011",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(1)   	when "10100",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(2)  	when "10101",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(3)   	when "10110",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(4) 	when "10111",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(5)   	when "11000",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(6) 	when "11001",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(7) 	when "11010",	</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(8)  	when "11011",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(9)  	when "11100",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(10)  	when "11101",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(11) 	when "11110",</FONT></I>
+<I><FONT COLOR=#808080>--						consblkprime(12) 	when "11111",						</FONT></I>
+<I><FONT COLOR=#808080>--						zero	when  others ;</FONT></I>
+	
+	with round select
+	mprime_tmp	 <= mblkprime( 0) 	<B>when</B> "00000",
+					mblkprime( 1)  	<B>when</B> "00001",
+					mblkprime( 2)  	<B>when</B> "00010",
+					mblkprime( 3)  	<B>when</B> "00011",
+					mblkprime( 4)  	<B>when</B> "00100",
+					mblkprime( 5) 	<B>when</B> "00101",
+					mblkprime( 6)  	<B>when</B> "00110",
+					mblkprime( 7)  	<B>when</B> "00111",
+					mblkprime( 8)  	<B>when</B> "01000",
+					mblkprime( 9)  	<B>when</B> "01001",
+					mblkprime(10)  	<B>when</B> "01010",
+					mblkprime(11)  	<B>when</B> "01011",
+					mblkprime(12)  	<B>when</B> "01100",	
+					mblkprime(13)  	<B>when</B> "01101",	
+					mblkprime(14)  	<B>when</B> "01110",	
+					mblkprime(15)  	<B>when</B> "01111",	
+					mblkprime(16)  	<B>when</B> "10000",	
+					mblkprime(17)  	<B>when</B> "10001",	
+					mblkprime(18)  	<B>when</B> "10010",	
+					mblkprime(19)   <B>when</B> "10011",	
+					mblkprime( 0)   <B>when</B> "10100",	
+					mblkprime( 1)  	<B>when</B> "10101",	
+					mblkprime( 2)   <B>when</B> "10110",	
+					mblkprime( 3) 	<B>when</B> "10111",	
+					mblkprime( 4)   <B>when</B> "11000",	
+					mblkprime( 5) 	<B>when</B> "11001",	
+					mblkprime( 6) 	<B>when</B> "11010",	
+					mblkprime( 7)  	<B>when</B> "11011",
+					mblkprime( 8)  	<B>when</B> "11100",
+					mblkprime( 9)  	<B>when</B> "11101",
+					mblkprime(10) 	<B>when</B> "11110",
+					mblkprime(11) 	<B>when</B> "11111",
+					zero <B>when</B> <B>others</B>;
+	
+	with round select 
+	consprime_tmp	 <= consblkprime( 0) 	<B>when</B> "00000",
+						consblkprime( 1)  	<B>when</B> "00001",
+						consblkprime( 2)  	<B>when</B> "00010",
+						consblkprime( 3)  	<B>when</B> "00011",
+						consblkprime( 4)  	<B>when</B> "00100",
+						consblkprime( 5) 	<B>when</B> "00101",
+						consblkprime( 6)  	<B>when</B> "00110",
+						consblkprime( 7)  	<B>when</B> "00111",
+						consblkprime( 8)  	<B>when</B> "01000",
+						consblkprime( 9)  	<B>when</B> "01001",
+						consblkprime(10)  	<B>when</B> "01010",
+						consblkprime(11)  	<B>when</B> "01011",
+						consblkprime(12)  	<B>when</B> "01100",	
+						consblkprime(13)  	<B>when</B> "01101",	
+						consblkprime(14)  	<B>when</B> "01110",	
+						consblkprime(15)  	<B>when</B> "01111",	
+						consblkprime(16)  	<B>when</B> "10000",	
+						consblkprime(17)  	<B>when</B> "10001",	
+						consblkprime(18)  	<B>when</B> "10010",	
+						consblkprime(19)   	<B>when</B> "10011",	
+						consblkprime( 0)   	<B>when</B> "10100",	
+						consblkprime( 1)  	<B>when</B> "10101",	
+						consblkprime( 2)   	<B>when</B> "10110",	
+						consblkprime( 3) 	<B>when</B> "10111",	
+						consblkprime( 4)   	<B>when</B> "11000",	
+						consblkprime( 5) 	<B>when</B> "11001",	
+						consblkprime( 6) 	<B>when</B> "11010",	
+						consblkprime( 7)  	<B>when</B> "11011",
+						consblkprime( 8)  	<B>when</B> "11100",
+						consblkprime( 9)  	<B>when</B> "11101",
+						consblkprime(10) 	<B>when</B> "11110",
+						consblkprime(11) 	<B>when</B> "11111",						
+						zero	<B>when</B>  <B>others</B> ;
+						
+	<FONT COLOR=#0000C0>output_gen</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> 3 <B>generate</B>
+		consout_tmp(i*2) 	<= mprime_tmp(i*2) <B>xor</B> consprime_tmp(i*2+1);
+		consout_tmp(i*2+1) 	<= mprime_tmp(i*2+1) <B>xor</B> consprime_tmp(i*2);
+	<B>end</B> <B>generate</B>;
+												 
+	consout <= wordmatrix2halfblk( consout_tmp );
+<B>end</B> muxbased;	
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

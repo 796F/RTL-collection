@@ -1,0 +1,37 @@
+<HTML>
+<TITLE>
+ gmu_blake/simvectors/README
+</TITLE>
+<BODY>
+<PRE>
+# v0.1 - <kgf@ee.ethz.ch> - Tue Jul 26 14:03:33 CEST 2011
+# - setup for the simvectors
+
+# copy files
+ln -s ../../scripts/gen_sha3_stimuli.pl 
+gcp -a ../../external/Blake_FinalRnd/Reference_Implementation/blake_ref.* .
+echo '#include "blake_ref.h"' > SHA3api_ref.h
+gcp -a ../../scripts/ETHZ_KAT.c .
+
+# compile the reference
+gcc -o ETHZ_KAT ETHZ_KAT.c blake_ref.c
+
+# run the generation script
+./gen_sha3_stimuli.pl
+
+# this should do it
+
+# ignore the following files on SVN
+cat <<EOF > svn.ignore
+stimuli.txt
+expresp.txt
+EOF
+
+svn -q propset svn:ignore -F svn.ignore .
+rm svn.ignore
+
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

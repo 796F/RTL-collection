@@ -1,0 +1,63 @@
+<HTML>
+<TITLE>
+ ethz_groestl/synopsys/scripts/compile.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># Groestl is faster if we elaborate things separately </FONT></I>
+
+
+<I><FONT COLOR=#808080>## Compile SUBBYTES ------------------------------------------------------</FONT></I>
+<B><FONT COLOR=008000>current_design</FONT></B> groestl_subbytes
+
+<I><FONT COLOR=#808080># some dummy constraints</FONT></I>
+<B><FONT COLOR=008000>set_load</FONT></B> [<B><FONT COLOR=008000>load_of</FONT></B> <I><FONT COLOR=0000FF>${LIB}</FONT></I>/<I><FONT COLOR=0000FF>${LOAD_CELL}</FONT></I>/<I><FONT COLOR=0000FF>${LOAD_PIN}</FONT></I>] [all_outputs]
+<B><FONT COLOR=008000>set_driving_cell</FONT></B> <I><FONT COLOR=AA0000>-no_design_rule</FONT></I> <I><FONT COLOR=AA0000>-library</FONT></I> <I><FONT COLOR=0000FF>${LIB}</FONT></I> <I><FONT COLOR=AA0000>-lib_cell</FONT></I> <I><FONT COLOR=0000FF>${DRIV_CELL}</FONT></I> <I><FONT COLOR=AA0000>-pin</FONT></I> <I><FONT COLOR=0000FF>${DRIV_PIN}</FONT></I> [all_inputs]
+
+<I><FONT COLOR=#808080># this should be common </FONT></I>
+<B>if</B>  {[<B>llength</B> <I><FONT COLOR=0000FF>$CLOCKLIST</FONT></I>] == 1 } {
+  <B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> groestl_subbytes_0.top.i_ethz_groestl.i_p.i_subbytes_0_flat
+}
+<I><FONT COLOR=#808080># one fourth of the total period for subbytes.. harsh.. </FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>subbytesdelay</FONT></I> [<B>expr</B> <I><FONT COLOR=0000FF>$CLOCK</FONT></I>/4] 
+set_max_delay <I><FONT COLOR=0000FF>$subbytesdelay</FONT></I> <I><FONT COLOR=AA0000>-to</FONT></I> [all_outputs]
+
+<B><FONT COLOR=008000>compile_ultra</FONT></B>
+<B><FONT COLOR=008000>set_dont_touch</FONT></B> [find design groestl_sub*] true
+
+<I><FONT COLOR=#808080>## Compile TOP with SUBBytes dont touched --------------------------------</FONT></I>
+<B><FONT COLOR=008000>current_design</FONT></B> ethz_groestl
+<B><FONT COLOR=008000>compile_ultra</FONT></B> <I><FONT COLOR=AA0000>-<B>scan</B></FONT></I>
+
+
+<I><FONT COLOR=#808080>## Uniquify and remove dont_touch ----------------------------------------</FONT></I>
+
+<B><FONT COLOR=008000>remove_attribute</FONT></B> [find design groestl_sub*] dont_touch
+<B><FONT COLOR=008000>current_design</FONT></B> groestl_p
+<B><FONT COLOR=008000>uniquify</FONT></B> <I><FONT COLOR=AA0000>-cell</FONT></I> [get_cells *sub*]
+
+<B><FONT COLOR=008000>current_design</FONT></B> groestl_q
+<B><FONT COLOR=008000>uniquify</FONT></B> <I><FONT COLOR=AA0000>-cell</FONT></I> [get_cells *sub*]
+
+
+<I><FONT COLOR=#808080># reset the wireload.. don't know if this is necessary</FONT></I>
+<I><FONT COLOR=#808080>#if  {[llength $CLOCKLIST] == 1 } {</FONT></I>
+  <B>foreach</B> NUM {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {
+    <B><FONT COLOR=008000>current_design</FONT></B> groestl_subbytes_<I><FONT COLOR=0000FF>${NUM}</FONT></I>
+    <I><FONT COLOR=#808080>## this is an SBOX the wireload should be the same </FONT></I>
+    <B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> groestl_subbytes_15.top.i_ethz_groestl.i_p.i_subbytes_0_flat
+  }
+<I><FONT COLOR=#808080>#}</FONT></I>
+
+<I><FONT COLOR=#808080>## Incremental compile --------------------------------------------------</FONT></I>
+
+<B><FONT COLOR=008000>current_design</FONT></B> ethz_groestl
+<B><FONT COLOR=008000>compile_ultra</FONT></B> <I><FONT COLOR=AA0000>-incremental</FONT></I>
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

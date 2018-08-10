@@ -1,0 +1,717 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/sha3_pkg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>package</B> sha3_pkg <B>is</B>		
+	<I><FONT COLOR=#808080>-- different versions of SHA3 candidates </FONT></I>
+	<B>constant</B> SHA3_ROUND1	:integer:= 1;
+	<B>constant</B> SHA3_ROUND2	:integer:= 2;
+	<B>constant</B> SHA3_ROUND3	:integer:= 3;
+	
+	<I><FONT COLOR=#808080>-- hash output size	</FONT></I>
+	<B>constant</B> HASH_SIZE_224	:integer:=224;
+	<B>constant</B> HASH_SIZE_256	:integer:=256;
+	<B>constant</B> HASH_SIZE_384	:integer:=384;
+	<B>constant</B> HASH_SIZE_512	:integer:=512;
+
+	<I><FONT COLOR=#808080>-- adder constants</FONT></I>
+	<B>constant</B> SCCA_BASED : integer := 0;			
+	<B>constant</B> SCCA_TREE_BASED : integer := 1;
+	<B>constant</B> CSA_BASED : integer := 2;
+	<B>constant</B> PC_BASED : integer := 3;
+	<B>constant</B> CSA_CPA_BASED : integer := 4;
+	<B>constant</B> CLA_BASED : integer := 5;
+	<B>constant</B> FCCA_BASED : integer := 6;
+	<B>constant</B> FCCA_TREE_BASED : integer := 7;
+	<B>constant</B> DSP_BASED : integer := 8;	
+	
+	<B>constant</B> YES : integer := 1;
+	<B>constant</B> NO : integer := 0;
+	
+	
+	<I><FONT COLOR=#808080>-- family constants</FONT></I>
+	<B>constant</B> SPARTAN3 : integer := 0;
+	<B>constant</B> VIRTEX4 : integer := 1;
+	<B>constant</B> VIRTEX5 : integer := 2;
+
+	<I><FONT COLOR=#808080>-- fifo mode constants</FONT></I>
+	<B>constant</B> ZERO_WAIT_STATE			: integer:=0;
+	<B>constant</B> ONE_WAIT_STATE				: integer:=1;  
+	<B>constant</B> ZERO_WAIT_STATE_PREFETCH		: integer:=2; 
+
+	<I><FONT COLOR=#808080>-- implementation constants</FONT></I>
+	<B>constant</B> DISTRIBUTED				: integer:=0; 
+	<B>constant</B> BRAM					: integer:=1; 
+	<B>constant</B> COMBINATIONAL				: integer:=2; 
+
+	<I><FONT COLOR=#808080>-- counter constants</FONT></I>
+	<B>constant</B> COUNTER_STYLE_1				: integer:=1; 
+	<B>constant</B> COUNTER_STYLE_2				: integer:=2; 
+	<B>constant</B> COUNTER_STYLE_3				: integer:=3; 
+	
+	<I><FONT COLOR=#808080>-- logic constants</FONT></I>
+	<B>constant</B> GND					: std_logic := '0';
+	<B>constant</B> VCC					: std_logic := '1';
+	
+	<I><FONT COLOR=#808080>-- aes constants</FONT></I>
+	<B>constant</B> AES_SBOX_SIZE				:integer:=8;
+	<B>constant</B> AES_WORD_SIZE				:integer:=32;
+	<B>constant</B> AES_BLOCK_SIZE				:integer:=128;
+	<B>constant</B> AES_KEY_SIZE				:integer:=128;
+	<B>constant</B> AES_ROUND_BASIC			:integer:=1;
+	<B>constant</B> AES_ROUND_TBOX				:integer:=2;
+	
+	<B>type</B> rom_pad64bit_type <B>is</B> <B>array</B> (0 <B>to</B> 7) <B>of</B> std_logic_vector(7 <B>downto</B> 0);
+	<B>constant</B> lookup_sel_lvl2_64bit_pad : rom_pad64bit_type := (
+		"10000000", "01000000", "00100000", "00010000", 
+		"00001000", "00000100", "00000010", "00000001");	
+	
+	<B>constant</B> lookup_sel_lvl1_64bit_pad : rom_pad64bit_type := (
+		"00000000", "10000000",	"11000000",	"11100000",
+		"11110000",	"11111000",	"11111100",	"11111110");	
+	
+	<B>type</B> rom_pad32bit_type <B>is</B> <B>array</B> (0 <B>to</B> 3) <B>of</B> std_logic_vector(3 <B>downto</B> 0); 
+	<B>constant</B> lookup_sel_lvl2_32bit_pad : rom_pad32bit_type := ("1000", "0100", "0010", "0001");	
+	
+	<B>constant</B> lookup_sel_lvl1_32bit_pad : rom_pad32bit_type := ("0000", "1000",	"1100",	"1110");	
+	
+	
+	<I><FONT COLOR=#808080>-- basic shifting and rotating functions</FONT></I>
+	<B>function</B> shrx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector;	
+	<B>function</B> shlx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector;	
+	<B>function</B> rorx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector;	
+	<B>function</B> rolx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector;
+	
+	<I><FONT COLOR=#808080>-- log based 2</FONT></I>
+	<B>function</B> log2 (N: natural) <B>return</B> natural;
+	
+	<I><FONT COLOR=#808080>-- switching endianess functions</FONT></I>
+	<I><FONT COLOR=#808080>-- Note : Names changed for clarity </FONT></I>
+	<I><FONT COLOR=#808080>-- switch_endian --> switch_endian_word</FONT></I>
+	<I><FONT COLOR=#808080>-- switch_endian_word --> switch_endian_byte </FONT></I>
+	<B>function</B> switch_endian_byte (  x : std_logic_vector; width : integer; w : integer ) <B>return</B> std_logic_vector;
+	<B>function</B> switch_endian_word (  x : std_logic_vector; width : integer; w : integer ) <B>return</B> std_logic_vector; 
+
+	<I><FONT COLOR=#808080>-- galois field multiplication functions for AES sbox combinational function</FONT></I>
+	<B>function</B> GF_SQ_SCL_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> GF_SCL_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> GF_MUL_2 ( x,y : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> GF_MUL_SCL_2 ( x,y : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0))<B>return</B> STD_LOGIC_VECTOR;   
+	<B>function</B> GF_INV_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> GF_SQ_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> MUL_X ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> MUL_MX ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR; 
+	<B>function</B> GF_INV_4 ( x : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0))<B>return</B> STD_LOGIC_VECTOR;
+	<B>function</B> GF_MUL_4 ( x, y : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0))<B>return</B> STD_LOGIC_VECTOR;  
+	<B>function</B> GF_SQ_SCL_4 ( x : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0))<B>return</B> STD_LOGIC_VECTOR;  
+	<B>function</B> GF_INV_8 ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0))<B>return</B> STD_LOGIC_VECTOR; 
+   
+   
+   <I><FONT COLOR=#808080>-- components declaration</FONT></I>
+	<B>component</B> csa <B>is</B> 
+		<B>generic</B> (n :integer := 32);
+		<B>port</B> (
+			a		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			b		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			cin		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			s		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+			cout	: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;	   
+
+	<B>component</B> fcca <B>is</B> 
+		<B>generic</B> (n :integer := 32);
+		<B>port</B> (
+			a		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			b		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			s		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;		
+	
+	<B>component</B> pc <B>is</B> 
+	<B>generic</B> (n :integer :=32);
+	<B>port</B> (
+		a		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		b		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		c		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		d		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		e		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s0		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s1		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s2		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0)
+	);
+	<B>end</B> <B>component</B>;
+
+	<B>component</B> regn <B>is</B>
+		<B>generic</B> ( 
+			N : integer := 32;
+			init : std_logic_vector
+		);
+		<B>port</B> ( 	  
+		    clk : <B>in</B> std_logic;	 
+			rst : <B>in</B> std_logic;
+		    en : <B>in</B> std_logic; 
+			input  : <B>in</B> std_logic_vector(N-1 <B>downto</B> 0);
+	        output : <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;
+
+
+	<B>component</B> d_ff <B>is</B> 
+	<B>port</B>(
+		clk		: <B>in</B> std_logic;
+		ena		: <B>in</B> std_logic;
+		rst		: <B>in</B> std_logic;
+		d		: <B>in</B> std_logic;
+		q		: <B>out</B> std_logic);
+	<B>end</B> <B>component</B>;
+
+	<B>component</B> piso <B>is</B>
+		<B>generic</B> ( 
+			N	: integer := 512;	<I><FONT COLOR=#808080>--inputs</FONT></I>
+			M	: integer := 32		<I><FONT COLOR=#808080>--outputs -- N must be divisible by M</FONT></I>
+		);
+		<B>port</B> (
+			clk 	 : <B>in</B> std_logic;
+			en   : <B>in</B> std_logic;
+			sel	 : <B>in</B> std_logic;
+			input  : <B>in</B> std_logic_vector(N-1 <B>downto</B> 0);
+			output : <B>out</B> std_logic_vector(M-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> sipo <B>is</B>
+		<B>generic</B> ( 
+			N	: integer := 512;
+			M	: integer := 32		<I><FONT COLOR=#808080>-- N must be divisible by M</FONT></I>
+		);
+		<B>port</B> (
+			clk 	 : <B>in</B> std_logic;				 
+			en     : <B>in</B> std_logic;
+			input  : <B>in</B> std_logic_vector(M-1 <B>downto</B> 0);
+			output : <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> countern <B>is</B>
+		<B>generic</B> ( 
+		    N : integer := 2;
+		    step:integer:=1;
+		    style	:integer :=COUNTER_STYLE_1	
+		);
+		<B>port</B> ( 	  
+		clk : <B>in</B> std_logic;
+		rst : <B>in</B> std_logic;
+	    load : <B>in</B> std_logic;
+	    en : <B>in</B> std_logic; 
+		input  : <B>in</B> std_logic_vector(N-1 <B>downto</B> 0);
+        output : <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>; 
+
+	<B>component</B> decountern <B>is</B>
+		<B>generic</B> ( 
+		n : integer := 64;	  
+			sub : integer := 1
+		);
+		<B>port</B> ( 	  
+			clk : <B>in</B> std_logic;
+			rst		: <B>in</B> std_logic;
+		    load : <B>in</B> std_logic;
+		    en : <B>in</B> std_logic; 
+			input  : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			<I><FONT COLOR=#808080>--sub    : in std_logic_vector(n-1 downto 0);</FONT></I>
+	        output : <B>out</B> std_logic_vector(n-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> sr_reg <B>is</B>		
+		<B>generic</B> ( init : std_logic := '0' );
+		<B>port</B> (					
+			rst			: <B>in</B> std_logic;
+			clk 		: <B>in</B> std_logic;
+			set     	: <B>in</B> std_logic;
+			clr         : <B>in</B> std_logic;
+			output		: <B>out</B> std_logic
+		);				 
+	<B>end</B> <B>component</B>;		 
+
+	<B>component</B> sync_clock <B>is</B>
+		<B>generic</B> (
+		fr : integer := 1
+		);
+		<B>port</B> (						 
+			rst		   	: <B>in</B> std_logic;
+			fast_clock 	: <B>in</B> std_logic;
+			slow_clock 	: <B>in</B> std_logic;
+			sync		: <B>out</B> std_logic
+		);
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> fifo_ram <B>is</B>
+		<B>generic</B> ( 	
+			fifo_mode	: integer := ZERO_WAIT_STATE;	
+			depth 		: integer := 512;
+			log2depth  	: integer := 9;
+			n 		: integer := 64 );	
+		<B>port</B> ( 	
+			clk 		: <B>in</B>  std_logic;
+			<B>write</B> 		: <B>in</B>  std_logic;
+			rd_addr 	: <B>in</B>  std_logic_vector (log2depth-1 <B>downto</B> 0);
+			wr_addr 	: <B>in</B>  std_logic_vector (log2depth-1 <B>downto</B> 0);
+			din 		: <B>in</B>  std_logic_vector (n-1 <B>downto</B> 0);
+			dout 		: <B>out</B> std_logic_vector (n-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> fifo
+		<B>generic</B> (
+			fifo_mode	: integer := ONE_WAIT_STATE;	
+			depth 		: integer := 64;
+			log2depth 	: integer := 6;
+			N 		: integer := 32);
+		<B>port</B> (
+			clk				: <B>in</B> std_logic;
+			rst				: <B>in</B> std_logic;
+			<B>write</B>			: <B>in</B> std_logic; 
+			read			: <B>in</B> std_logic;
+			din 			: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+			dout	 		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+			full			: <B>in</B> std_logic; 
+			empty 			: <B>out</B> std_logic);
+	<B>end</B> <B>component</B>; 
+
+	<B>component</B> aes_sbox_sync <B>is</B>
+	<B>port</B>( 
+			clk		: <B>in</B> std_logic;
+			input 		: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+	        	output 		: <B>out</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_sbox <B>is</B>
+	<B>generic</B> (rom_style :integer:=DISTRIBUTED);	
+	<B>port</B>( 
+		
+			input 		: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+	        output 		: <B>out</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_mul <B>is</B>
+	<B>generic</B> (cons :integer := 3);
+	<B>port</B>( 
+		input 		: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+	        output 		: <B>out</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_mixcolumn <B>is</B>
+	<B>port</B>( 
+		input 		: <B>in</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0);
+	     output 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	
+	<B>component</B> aes_shiftrow <B>is</B>
+	<B>generic</B> (n	:integer := AES_BLOCK_SIZE;	s 	:integer := AES_SBOX_SIZE);
+	<B>port</B>( 
+		input 		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	    output 		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_tbox0 <B>is</B>
+	<B>port</B> (
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>; 
+	
+	<B>component</B> aes_tbox1 <B>is</B>
+	<B>port</B> (
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>; 
+	
+	<B>component</B> aes_tbox2 <B>is</B>
+	<B>port</B> (
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>; 
+
+	<B>component</B> aes_tbox3 <B>is</B>
+	<B>port</B> (
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>; 
+	
+	<B>component</B> aes_tbox0_sync <B>is</B>
+	<B>port</B> (
+		clk 		: <B>in</B> std_logic;
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+
+	<B>end</B> <B>component</B>;
+
+	<B>component</B> aes_tbox1_sync <B>is</B>
+	<B>port</B> (
+		clk 		: <B>in</B> std_logic;
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+
+	<B>end</B> <B>component</B>;
+	
+		<B>component</B> aes_tbox2_sync <B>is</B>
+	<B>port</B> (
+		clk 		: <B>in</B> std_logic;
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_tbox3_sync <B>is</B>
+	<B>port</B> (
+		clk 		: <B>in</B> std_logic;
+		address 	: <B>in</B> std_logic_vector(AES_SBOX_SIZE-1 <B>downto</B> 0);
+		dout 		: <B>out</B> std_logic_vector(AES_WORD_SIZE-1 <B>downto</B> 0));
+
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_round <B>is</B>
+	<B>generic</B> (rom_style :integer:=DISTRIBUTED);
+	<B>port</B>( 
+		input 		: <B>in</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0);
+		key			: <B>in</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0);
+        output 		: <B>out</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> aes_round_sync <B>is</B>
+	<B>generic</B> (rom_style :integer:=DISTRIBUTED);
+	<B>port</B>( 
+		clk			: <B>in</B> std_logic;
+		input 		: <B>in</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0);
+		key			: <B>in</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0);
+        output 		: <B>out</B> std_logic_vector(AES_BLOCK_SIZE-1 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> sha3_fsm3 <B>is</B>					
+		<B>generic</B> ( w : integer := 64; h : integer := 256 );
+		<B>port</B> (	   
+			<I><FONT COLOR=#808080>--global</FONT></I>
+			clk  : <B>in</B> std_logic;
+			rst		: <B>in</B> std_logic;
+		
+			<I><FONT COLOR=#808080>-- datapath</FONT></I>
+			eo : <B>out</B> std_logic;
+			
+			<I><FONT COLOR=#808080>-- fsm 2 handshake signal</FONT></I>
+			output_write : <B>in</B> std_logic;	
+			output_write_clr : <B>out</B> std_logic;	
+			output_busy_clr  : <B>out</B> std_logic;	
+			
+			<I><FONT COLOR=#808080>-- fifo</FONT></I>
+			dst_ready : <B>in</B> std_logic;
+			dst_write : <B>out</B> std_logic
+		);
+	<B>end</B> <B>component</B>;
+
+	<B>component</B> aes_sbox_logic <B>is</B>
+	    <B>Port</B> ( S_IN : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0);
+	           S_OUT : <B>out</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0));
+	<B>end</B> <B>component</B>;
+
+	<B>component</B> shfreg <B>is</B>
+	<B>generic</B> ( 
+		width : integer := 32; 
+		depth : integer := 16 );
+	<B>port</B> (
+		clk : <B>in</B> std_logic;
+		en : <B>in</B> std_logic;
+		i : <B>in</B> std_logic_vector(width-1 <B>downto</B> 0);
+		o : <B>out</B> std_logic_vector(width-1 <B>downto</B> 0) );
+	<B>end</B> <B>component</B>;
+	
+	<B>component</B> adder <B>is</B> 
+	<B>generic</B> (
+		adder_type : integer:= SCCA_BASED;
+		n : integer := 64);
+	<B>port</B>(
+		a : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		b : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s : <B>out</B> std_logic_vector(n-1 <B>downto</B> 0)
+	);		
+	<B>end</B> <B>component</B>;	
+	
+	<B>component</B> regna <B>is</B>
+		<B>generic</B> (  
+			RST_ACTIVE_VALUE : std_logic := '0';
+			N : integer := 32;
+			INIT : std_logic_vector
+		);
+		<B>port</B> ( 	  
+		    clk 	: <B>in</B> std_logic;
+			rst 	: <B>in</B> std_logic;
+		    en 		: <B>in</B> std_logic; 
+			input  	: <B>in</B> std_logic_vector(N-1 <B>downto</B> 0);
+	        output 	: <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;	   
+	
+	<B>component</B> sr_rega <B>is</B>
+		<B>generic</B> (	 
+			RST_ACTIVE_VALUE : std_logic := '0';
+		  	INIT : std_logic := '0'
+		);
+		<B>port</B> (					
+			rst			: <B>in</B> std_logic;
+			clk 		: <B>in</B> std_logic;
+			set     	: <B>in</B> std_logic;
+			clr         : <B>in</B> std_logic;
+			output		: <B>out</B> std_logic
+		);				 
+	<B>end</B> <B>component</B>;		
+	
+	<B>component</B> counterna <B>is</B>
+		<B>generic</B> ( 	   
+			RST_ACTIVE_VALUE : std_logic := '0';
+			N 	: integer := 2	
+		);
+		<B>port</B> ( 	  
+			clk : <B>in</B> std_logic;
+			rst : <B>in</B> std_logic;
+		    load : <B>in</B> std_logic;
+		    en : <B>in</B> std_logic; 
+	        output : <B>out</B> std_logic_vector(N-1 <B>downto</B> 0)
+		);
+	<B>end</B> <B>component</B>;		
+<B>end</B> sha3_pkg;
+
+<I><FONT COLOR=#808080>-- functions description</FONT></I>
+<B>package</B> body sha3_pkg <B>is</B>
+	<B>function</B> shrx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> zeros	: std_logic_vector(y-1 <B>downto</B> 0) := (<B>others</B> => '0'); 
+	<B>begin</B>						 							
+		<B>return</B> (zeros & x(x'<B><I>high</I></B> <B>downto</B> y));
+	<B>end</B> shrx;	   
+	
+	<B>function</B> shlx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> zeros	: std_logic_vector(y-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>begin</B>		
+		<B>return</B> (x(x'<B><I>high</I></B>-y <B>downto</B> x'<B><I>low</I></B>) & zeros);
+	<B>end</B> shlx;																						 
+	
+	<B>function</B> rorx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector <B>is</B>
+	<B>begin</B>						 							
+		<B>return</B> (x(y-1 <B>downto</B> x'<B><I>low</I></B>) & x(x'<B><I>high</I></B> <B>downto</B> y));
+	<B>end</B> rorx;	   
+	
+	<B>function</B> rolx ( x : std_logic_vector; y : integer) <B>return</B> std_logic_vector <B>is</B>
+	<B>begin</B>						 							
+		<B>return</B> (x(x'<B><I>high</I></B>-y <B>downto</B> x'<B><I>low</I></B>) & x(x'<B><I>high</I></B> <B>downto</B> x'<B><I>high</I></B>-y+1));
+	<B>end</B> rolx;	   
+	
+	<B>function</B> log2 (N: natural) <B>return</B> natural <B>is</B> 
+	<B>begin</B>	
+<I><FONT COLOR=#808080>--		 if N then</FONT></I>
+<I><FONT COLOR=#808080>--			 return 1;</FONT></I>
+<I><FONT COLOR=#808080>--		 else</FONT></I>
+<I><FONT COLOR=#808080>--			 return 1 + log2(N/2);</FONT></I>
+<I><FONT COLOR=#808080>--		 end if;	</FONT></I>
+		
+		 <B>if</B> ( N = 0 ) <B>then</B> 
+			 <B>return</B> 0;
+		 <B>elsif</B> N <= 2 <B>then</B>
+			 <B>return</B> 1;
+		 <B>else</B>					 
+			<B>if</B> (N mod 2 = 0) <B>then</B>
+				<B>return</B> 1 + log2(N/2);
+			<B>else</B>
+				<B>return</B> 1 + log2((N+1)/2);
+			<B>end</B> <B>if</B>;			
+		 <B>end</B> <B>if</B>;	
+	<B>end</B>;
+
+	<B>function</B> switch_endian_byte (  x : std_logic_vector; width : integer; w : integer ) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> xseg : integer := width/w;
+		<B>variable</B> wseg : integer := w/8;			   
+		<B>variable</B> retval : std_logic_vector(width-1 <B>downto</B> 0);
+	<B>begin</B>				  
+		<B>for</B> i <B>in</B> xseg <B>downto</B> 1 <B>loop</B>
+			<B>for</B> j <B>in</B> 0 <B>to</B> wseg-1 <B>loop</B>
+				retval(i*w - 1 - j*8 <B>downto</B> i*w - 8 - j*8 ) := x(i*w - 1 - (wseg-1-j)*8 <B>downto</B> i*w - 8 - (wseg-1-j)*8);
+			<B>end</B> <B>loop</B>;
+		<B>end</B> <B>loop</B>;
+		<B>return</B>(retval);				
+	<B>end</B> switch_endian_byte;		  
+	
+	<B>function</B> switch_endian_word ( x : std_logic_vector; width : integer; w : integer ) <B>return</B> std_logic_vector <B>is</B>
+		<B>variable</B> xseg : integer := width/w;   
+		<B>variable</B> retval : std_logic_vector(width-1 <B>downto</B> 0);
+	<B>begin</B>				  
+		<B>for</B> i <B>in</B> xseg <B>downto</B> 1 <B>loop</B>			
+			retval(i*w - 1 <B>downto</B> w*(i-1) ) := x(w*(xseg-i+1) - 1 <B>downto</B> w*(xseg-i));			
+		<B>end</B> <B>loop</B>;
+		<B>return</B>(retval);				
+	<B>end</B> switch_endian_word;	
+	
+	<B>function</B> GF_SQ_SCL_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (1 <B>downto</B> 0);
+	<B>begin</B>
+		y := x(1) & (x(1) <B>xor</B> x(0));	
+		<B>return</B> y;
+	<B>end</B> GF_SQ_SCL_2;
+	
+	
+	<B>function</B> GF_SCL_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 	
+		<B>variable</B> y : STD_LOGIC_VECTOR (1 <B>downto</B> 0);	
+	<B>begin</B>
+		y := x(0) & (x(1) <B>xor</B> x(0));	
+		<B>return</B> y;
+	<B>end</B> GF_SCL_2;
+
+
+	<B>function</B> GF_MUL_2 ( x,y : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> o : STD_LOGIC_VECTOR (1 <B>downto</B> 0);	
+	<B>begin</B>			
+		o := (((x(1) <B>xor</B> x(0)) <B>and</B> (y(1) <B>xor</B> y(0))) <B>xor</B> (x(1) <B>and</B> y(1))) & (((x(1) <B>xor</B> x(0)) <B>and</B> (y(1) <B>xor</B> y(0))) <B>xor</B> (x(0) <B>and</B> y(0)));		
+		<B>return</B> o;
+	<B>end</B> GF_MUL_2; 
+	
+	
+	<B>function</B> GF_MUL_SCL_2 ( x,y : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 	
+		<B>variable</B> o : STD_LOGIC_VECTOR (1 <B>downto</B> 0);	
+	<B>begin</B>		
+		o := (((x(1) <B>xor</B> x(0)) <B>and</B> (y(1) <B>xor</B> y(0))) <B>xor</B> (x(0) <B>and</B> y(0))) & ((x(1) <B>and</B> y(1)) <B>xor</B> (x(0) <B>and</B> y(0)));		
+		<B>return</B> o;
+	<B>end</B> GF_MUL_SCL_2;		 
+
+	
+	<B>function</B> GF_INV_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (1 <B>downto</B> 0);
+	<B>begin</B>
+		y(1) := x(0);
+	  	y(0) := x(1);
+		<B>return</B> y;
+	<B>end</B> GF_INV_2;
+	
+	
+	<B>function</B> GF_SQ_2 ( x : <B>in</B>  STD_LOGIC_VECTOR (1 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (1 <B>downto</B> 0);
+	<B>begin</B>
+	  	y(1) := x(0);
+	  	y(0) := x(1);
+		<B>return</B> y;
+	<B>end</B> GF_SQ_2; 
+	
+	<B>function</B> MUL_X ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (7 <B>downto</B> 0);
+	<B>begin</B>
+		y(7) := x(7) <B>xor</B> x(6) <B>xor</B> x(5) <B>xor</B> x(2) <B>xor</B> x(1) <B>xor</B> x(0);
+		y(6) := x(6) <B>xor</B> x(5) <B>xor</B> x(4) <B>xor</B> x(0);
+		y(5) := x(6) <B>xor</B> x(5) <B>xor</B> x(1) <B>xor</B> x(0);	
+		y(4) := x(7) <B>xor</B> x(6) <B>xor</B> x(5) <B>xor</B> x(0);
+		y(3) := x(7) <B>xor</B> x(4) <B>xor</B> x(3) <B>xor</B> x(1) <B>xor</B> x(0);
+		y(2) := x(0);
+		y(1) := x(6) <B>xor</B> x(5) <B>xor</B> x(0);
+		y(0) := x(6) <B>xor</B> x(3) <B>xor</B> x(2) <B>xor</B> x(1) <B>xor</B> x(0);
+		<B>return</B> y;
+	<B>end</B> MUL_X;	  
+
+	<B>function</B> MUL_MX ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (7 <B>downto</B> 0);
+	<B>begin</B>
+		y(7) := x(5) <B>xor</B> x(3);	
+		y(6) := x(7) <B>xor</B> x(3);
+		y(5) := x(6) <B>xor</B> x(0);
+		y(4) := x(7) <B>xor</B> x(5) <B>xor</B> x(3);
+		y(3) := x(7) <B>xor</B> x(6) <B>xor</B> x(5) <B>xor</B> x(4) <B>xor</B> x(3);
+		y(2) := x(6) <B>xor</B> x(5) <B>xor</B> x(3) <B>xor</B> x(2) <B>xor</B> x(0);
+		y(1) := x(5) <B>xor</B> x(4) <B>xor</B> x(1);
+		y(0) := x(6) <B>xor</B> x(4) <B>xor</B> x(1);
+	<B>return</B> y;
+	<B>end</B> MUL_MX;	   
+
+
+	
+	<B>function</B> GF_INV_4 ( x : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (3 <B>downto</B> 0);
+		<B>variable</B> r0, r1, SQ_IN, SQ_OUT, MUL_1_OUT, GF_INV_IN, GF_INV_OUT, MUL_2_OUT , MUL_3_OUT :STD_LOGIC_VECTOR (1 <B>downto</B> 0);
+	<B>begin</B>
+		r1 := x(3 <B>downto</B> 2);
+		r0 := x(1 <B>downto</B> 0);
+		SQ_IN := r1 <B>xor</B> r0;
+		SQ_OUT := GF_SQ_SCL_2 ( x => SQ_IN);
+		MUL_1_OUT := GF_MUL_2( x => r1, y => r0);
+		GF_INV_IN := MUL_1_OUT <B>xor</B> SQ_OUT;
+		GF_INV_OUT := GF_INV_2(x => GF_INV_IN);
+		MUL_2_OUT := GF_MUL_2 ( x => r1, y => GF_INV_OUT);
+		MUL_3_OUT := GF_MUL_2 ( x => GF_INV_OUT, y => r0);
+		y := MUL_3_OUT & MUL_2_OUT;
+		<B>return</B> y;
+	<B>end</B> GF_INV_4;
+	
+
+	<B>function</B> GF_MUL_4 ( x,y : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> o : STD_LOGIC_VECTOR (3 <B>downto</B> 0);
+		<B>variable</B> tao1, tao0, delta1, delta0, fi1, fi0, tmp1, tmp0, RES_MUL1, RES_MUL0,RES_MUL_SCL: std_logic_vector (1 <B>downto</B> 0);
+	<B>begin</B>
+		tao1 := x(3 <B>downto</B> 2);
+		tao0 := x(1 <B>downto</B> 0);
+		delta1 := y(3 <B>downto</B> 2);
+		delta0 := y(1 <B>downto</B> 0);
+		tmp1 := tao1 <B>xor</B> tao0;
+		tmp0 := delta1 <B>xor</B> delta0;
+		RES_MUL1 := GF_MUL_2 ( x=> tao1, y=> delta1);
+		RES_MUL0 := GF_MUL_2 ( x=> tao0, y=> delta0);
+		RES_MUL_SCL := GF_MUL_SCL_2( x=> tmp1, y=> tmp0);
+		fi1 := RES_MUL1 <B>xor</B> RES_MUL_SCL;
+		fi0 := RES_MUL0 <B>xor</B> RES_MUL_SCL;
+		o := fi1 & fi0;
+		<B>return</B> o;
+	<B>end</B> GF_MUL_4;	
+
+	<B>function</B> GF_SQ_SCL_4 ( x : <B>in</B>  STD_LOGIC_VECTOR (3 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (3 <B>downto</B> 0);
+		<B>variable</B> tao1, tao0, delta1, delta0, tmp1, tmp0: std_logic_vector (1 <B>downto</B> 0);
+	<B>begin</B>
+		tao1 := x(3 <B>downto</B> 2);
+		tao0 := x(1 <B>downto</B> 0);
+		tmp1 := tao1 <B>xor</B> tao0;
+		tmp0 := GF_SCL_2 ( x => tao0);
+		delta1 := GF_SQ_2( x=> tmp1);
+		delta0 := GF_SQ_2 ( x=> tmp0);
+		y := delta1 & delta0;
+		<B>return</B> y;
+	<B>end</B> GF_SQ_SCL_4;  
+	
+
+	<B>function</B> GF_INV_8 ( x : <B>in</B>  STD_LOGIC_VECTOR (7 <B>downto</B> 0)) <B>return</B> STD_LOGIC_VECTOR <B>is</B> 
+		<B>variable</B> y : STD_LOGIC_VECTOR (7 <B>downto</B> 0);
+		<B>variable</B> r0, r1, SQ_IN, SQ_OUT, MUL_1_OUT, GF_INV_IN, GF_INV_OUT, MUL_2_OUT , MUL_3_OUT :STD_LOGIC_VECTOR (3 <B>downto</B> 0);
+	<B>begin</B>
+		r1 := x(7 <B>downto</B> 4);
+		r0 := x(3 <B>downto</B> 0);
+		SQ_IN := r1 <B>xor</B> r0;
+		SQ_OUT := GF_SQ_SCL_4 ( x => SQ_IN);
+		MUL_1_OUT := GF_MUL_4 ( x => r1, y => r0);	
+		GF_INV_IN := MUL_1_OUT <B>xor</B> SQ_OUT;	
+		GF_INV_OUT := GF_INV_4 (x => GF_INV_IN);
+		MUL_2_OUT := GF_MUL_4 ( x => r1, y => GF_INV_OUT);	
+		MUL_3_OUT := GF_MUL_4 ( x => GF_INV_OUT, y => r0);	
+		y := MUL_3_OUT  & MUL_2_OUT;
+		<B>return</B> y;
+	<B>end</B> GF_INV_8;
+	
+<B>end</B> <B>package</B> body sha3_pkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

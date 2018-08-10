@@ -1,0 +1,53 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/sr_rega.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+			 
+<I><FONT COLOR=#808080>-- set-reset asynchronous register</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+<B>entity</B> sr_rega <B>is</B>
+	<B>generic</B> (	 
+		RST_ACTIVE_VALUE : std_logic := '0';
+	  	INIT : std_logic := '0'
+	);
+	<B>port</B> (					
+		rst			: <B>in</B> std_logic;
+		clk 		: <B>in</B> std_logic;
+		set     	: <B>in</B> std_logic;
+		clr         : <B>in</B> std_logic;
+		output		: <B>out</B> std_logic
+	);				 
+<B>end</B> sr_rega;
+
+<B>architecture</B> struct <B>of</B> sr_rega <B>is</B>   
+	<B>signal</B> outputWire : std_logic;
+<B>begin</B>	   					  	   	
+	<FONT COLOR=#0000C0>reg_gen</FONT> : <B>process</B>( rst, clk )
+	<B>begin</B>	
+		<B>if</B> ( rst = RST_ACTIVE_VALUE ) <B>then</B>
+			outputWire <= INIT;
+		<B>elsif</B> rising_edge(clk) <B>then</B>  
+			outputWire <= set <B>or</B> ((<B>not</B> clr) <B>and</B> outputWire);			
+		<B>end</B> <B>if</B>;	
+	<B>end</B> <B>process</B>;
+	output <= outputWire;
+<B>end</B> struct;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

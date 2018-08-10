@@ -1,0 +1,366 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/gmu_sha2_tb.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : SHA2 testbench</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : gmu_sha2_tb.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-09-01</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-01</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Standard Testbench</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-01  1.0      kgf	Created</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+
+
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.simulstuff.all;
+<B>use</B> std.textio.all;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>entity</B> gmu_sha2_tb <B>is</B>
+
+<B>end</B> gmu_sha2_tb;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>architecture</B> test <B>of</B> gmu_sha2_tb <B>is</B>
+
+
+  <B>component</B> gmu_sha2_top
+    <B>port</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+      <FONT COLOR=#804040>DataxDI</FONT>        : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+      <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+      <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+      <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+      <FONT COLOR=#804040>DataxDO</FONT>        : <B>out</B> std_logic_vector(255 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+  
+  <I><FONT COLOR=#808080>-- component ports</FONT></I>
+  <B>signal</B> <FONT COLOR=#32CD32>ClkxC</FONT>         : std_logic;
+  <B>signal</B> <FONT COLOR=#FF6347>RstxRB</FONT>        : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxS</FONT>    : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>InWrEnxS</FONT>      : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>OutWrEnxS</FONT>     : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>PenUltCyclexS</FONT> : std_logic;
+  <B>signal</B> <FONT COLOR=#804040>DataInxD</FONT>      : std_logic_vector(511 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>DigestxD</FONT>      : std_logic_vector(255 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>ExpRespxD</FONT>     : std_logic_vector(255 <B>downto</B> 0);
+  <I><FONT COLOR=#808080>-- clock</FONT></I>
+  <B>signal</B> Clk : std_logic := '1';
+  <B>signal</B> <FONT COLOR=#CCA800>ScanInxT</FONT> : std_logic := '0';   <I><FONT COLOR=#808080>-- No scan for this version</FONT></I>
+  <B>signal</B> <FONT COLOR=#CCA800>ScanEnxT</FONT> : std_logic := '0';   <I><FONT COLOR=#808080>-- No scan for this version</FONT></I>
+  <B>signal</B> <FONT COLOR=#CCA800>ScanOutxT</FONT>: std_logic;
+
+
+
+   <B>type</B> stimulirecordtype <B>is</B> record
+      <FONT COLOR=#804040>DataInxD</FONT>  : std_logic_vector(511 <B>downto</B> 0);
+      <FONT COLOR=#1E90FF>FinBlockxS</FONT>: std_logic;
+      <FONT COLOR=#804040>DigestxD</FONT>  : std_logic_vector(255 <B>downto</B> 0);
+   <B>end</B> record;
+
+   <B>signal</B> STIMULI: stimulirecordtype;    <I><FONT COLOR=#808080>-- record of stimuli</FONT></I>
+   <I><FONT COLOR=#808080>-- declarations of signals that do help coordinate testbench processes</FONT></I>
+   <B>signal</B> SIMPROGRESS : ResolveTrafficLight trafficlight := orange;
+   <I><FONT COLOR=#808080>-- timing of clock and simulation events</FONT></I>
+   <B>constant</B> clkphasehigh: time:= 10 ns;
+   <B>constant</B> clkphaselow: time:= 10 ns;
+   <B>constant</B> responseacquisitiontime: time:= 15 ns;
+   <B>constant</B> stimulusapplicationtime: time:= 5 ns;
+   <B>constant</B> resetactivetime:         time:= 5 ns;
+
+  
+   <I><FONT COLOR=#808080>-- declaration of stimuli, expected responses, and simulation report files</FONT></I>
+   <B>file</B> stimulifile : <FONT COLOR=#CCA800>text</FONT>;
+   <B>constant</B> stimulifilename : string := "../simvectors/testvectors.<FONT COLOR=#CCA800>txt</FONT>";
+
+
+  <I><FONT COLOR=#808080>---- declaration of non-universal i.e. MUT-dependent subprograms</FONT></I>
+  
+   <I><FONT COLOR=#808080>-- purpose: get one record worth of stimuli from file.</FONT></I>
+   <B>impure</B> <B>function</B> GetStimuliRecord
+      (<B>file</B> stimulifile : <FONT COLOR=#CCA800>text</FONT>)
+      <B>return</B> stimulirecordtype
+   <B>is</B>
+      <B>variable</B> read_ok : boolean;
+      <B>variable</B> in_line, in_line_tmp : line;
+      <I><FONT COLOR=#808080>-- stimuli to default to unknown in case no value is obtained from file</FONT></I>
+      <B>variable</B> stimulirecord : stimulirecordtype :=
+            ( <FONT COLOR=#804040>DataInxD</FONT>     => (<B>others</B> => '0'),
+              <FONT COLOR=#1E90FF>FinBlockxS</FONT>   => '0',
+              <FONT COLOR=#804040>DigestxD</FONT>     => (<B>others</B> => '-')
+            );
+   <B>begin</B>      
+      <I><FONT COLOR=#808080>-- read a line from the stimuli file</FONT></I>
+      <I><FONT COLOR=#808080>-- skipping any empty and comment lines encountered</FONT></I>
+      <B>loop</B>
+         <B>readline</B>(stimulifile,in_line);
+         <I><FONT COLOR=#808080>-- copy line read to enable meaningful error messages later</FONT></I>
+         in_line_tmp := new string'(in_line(in_line'<B><I>low</I></B> <B>to</B> in_line'<B><I>high</I></B>));
+         <B>if</B> in_line_tmp'<B><I>length</I></B> >= 1 <B>then</B>
+            <B>exit</B> <B>when</B> in_line_tmp(1) /= '%';
+         <B>end</B> <B>if</B>;
+         <B>deallocate</B>(in_line_tmp);
+      <B>end</B> <B>loop</B>;
+      <I><FONT COLOR=#808080>-- extract all values of a record of stimuli</FONT></I>
+         GetFileEntry
+            (stimulirecord.<FONT COLOR=#804040>DataInxD</FONT>,in_line,in_line_tmp,stimulifilename);
+         GetFileEntry
+            (stimulirecord.<FONT COLOR=#1E90FF>FinBlockxS</FONT>,in_line,in_line_tmp,stimulifilename);
+         GetFileEntry
+            (stimulirecord.<FONT COLOR=#804040>DigestxD</FONT>,in_line,in_line_tmp,stimulifilename);
+      <I><FONT COLOR=#808080>-- deallocate line copy now that all entries have been read</FONT></I>
+      <B>deallocate</B>(in_line_tmp);
+      <B>return</B> stimulirecord;
+   <B>end</B> GetStimuliRecord;
+
+   <I><FONT COLOR=#808080>-- purpose: compose a failure message line and write it to the report file.</FONT></I>
+   <B>procedure</B> PutSimulationReportFailure
+      (<FONT COLOR=#804040>ActualDigestxD</FONT>   : <B>in</B> std_logic_vector(255 <B>downto</B> 0);
+       <FONT COLOR=#804040>ExpectedDigestxD</FONT> : <B>in</B> std_logic_vector(255 <B>downto</B> 0);
+       respmatch : <B>in</B> respmatchtype)
+   <B>is</B>
+      <B>variable</B> out_line : line;      
+   <B>begin</B>
+      <B>report</B> "Error Encountered "   severity warning;
+      <B>write</B>(out_line,string'("ERROR at "));
+      <B>write</B>(out_line,now);
+      <B>writeline</B>(output,out_line);         
+      <I><FONT COLOR=#808080>-- add expected responses</FONT></I>
+      <B>write</B>(out_line,string'("   Received = "));
+      vector2hex(out_line,<FONT COLOR=#804040>ActualDigestxD</FONT>);
+      <B>writeline</B>(output,out_line);         
+      <B>write</B>(out_line,string'("   Expected = "));
+      vector2hex(out_line,<FONT COLOR=#804040>ExpectedDigestxD</FONT>);
+      <B>writeline</B>(output,out_line);
+   <B>end</B> PutSimulationReportFailure;
+
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- test</FONT></I>
+
+  <I><FONT COLOR=#808080>-- component instantiation</FONT></I>
+  DUT: gmu_sha2_top
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#32CD32>ClkxCI</FONT>         => <FONT COLOR=#32CD32>ClkxC</FONT>,
+      <FONT COLOR=#FF6347>RstxRBI</FONT>        => <FONT COLOR=#FF6347>RstxRB</FONT>,
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      => <FONT COLOR=#1E90FF>InWrEnxS</FONT>,
+      <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    => <FONT COLOR=#1E90FF>FinBlockxS</FONT>,
+      <FONT COLOR=#804040>DataxDI</FONT>        => <FONT COLOR=#804040>DataInxD</FONT>,
+      <FONT COLOR=#CCA800>ScanInxTI</FONT>      => <FONT COLOR=#CCA800>ScanInxT</FONT>,
+      <FONT COLOR=#CCA800>ScanEnxTI</FONT>      => <FONT COLOR=#CCA800>ScanEnxT</FONT>,
+      <FONT COLOR=#CCA800>ScanOutxTO</FONT>     => <FONT COLOR=#CCA800>ScanOutxT</FONT>,
+      <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     => <FONT COLOR=#1E90FF>OutWrEnxS</FONT>,
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexS</FONT>,
+      <FONT COLOR=#804040>DataxDO</FONT>        => <FONT COLOR=#804040>DigestxD</FONT>);
+
+  <I><FONT COLOR=#808080>-- clock generation</FONT></I>
+   <FONT COLOR=#0000C0>Tb_clkgen</FONT> : <B>process</B>
+   <B>begin</B>
+      <B>case</B> SIMPROGRESS <B>is</B>
+         <I><FONT COLOR=#808080>-- if orange then wait for start sign</FONT></I>
+         <B>when</B> orange => <B>wait</B> <B>until</B> SIMPROGRESS=green;
+         <I><FONT COLOR=#808080>-- if green then proceed with yet another clock period</FONT></I>
+         <B>when</B> green => null;
+         <B>when</B> green2 => null;
+         <I><FONT COLOR=#808080>-- if yellow (neither red nor any other color should occur here) </FONT></I>
+         <I><FONT COLOR=#808080>-- then terminate</FONT></I>
+         <B>when</B> <B>others</B> => SIMPROGRESS <= red; <B>wait</B>; <I><FONT COLOR=#808080>-- forever</FONT></I>
+      <B>end</B> <B>case</B>;
+      <FONT COLOR=#32CD32>CLKxC</FONT> <= '1';
+      <B>wait</B> <B>for</B> clkphasehigh;
+      <FONT COLOR=#32CD32>CLKxC</FONT> <= '0';
+      <B>wait</B> <B>for</B> clkphaselow;
+   <B>end</B> <B>process</B> <FONT COLOR=#0000C0>Tb_clkgen</FONT>;
+
+
+
+   <I><FONT COLOR=#808080>-- launch and terminate simulation run</FONT></I>
+   <I><FONT COLOR=#808080>----------------------------------------------------------------------------</FONT></I>
+   <FONT COLOR=#0000C0>Tb_launchterm</FONT> : <B>process</B>
+      <B>variable</B> status: file_open_status;
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- open files for stimuli, config, and simulation report</FONT></I>
+      <B>file_open</B>(status,stimulifile,stimulifilename,read_mode);
+      <B>assert</B> status=open_ok
+         <B>report</B> FileOpenMessage(stimulifilename,status) severity failure;      
+      <I><FONT COLOR=#808080>-- give start sign to other processes</FONT></I>
+      SIMPROGRESS <= green;
+      <I><FONT COLOR=#808080>-- suspend until clock generator shuts down</FONT></I>
+      <B>wait</B> <B>until</B> SIMPROGRESS=red;
+      <B>report</B> "Simulation run completed, all stimuli processed."
+         severity note;
+      <I><FONT COLOR=#808080>-- close files</FONT></I>
+      <B>file_close</B>(stimulifile);
+
+      <B>wait</B>; <I><FONT COLOR=#808080>-- forever to starve event queue</FONT></I>
+   <B>end</B> <B>process</B> <FONT COLOR=#0000C0>Tb_launchterm</FONT>;
+
+
+
+
+   <I><FONT COLOR=#808080>-- obtain stimulus and apply it to MUT</FONT></I>
+   <I><FONT COLOR=#808080>----------------------------------------------------------------------------</FONT></I>
+
+   <FONT COLOR=#0000C0>Tb_stimappli</FONT> : <B>process</B>
+      <I><FONT COLOR=#808080>-- variables for accounting of mismatching responses</FONT></I>
+      <B>variable</B> respmatch : respmatchtype;
+      <B>variable</B> respaccount : respaccounttype := (0,0,0,0,0);
+      <B>variable</B> exprespavail : boolean := true;
+
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- wait for start sign</FONT></I>
+      <B>wait</B> <B>until</B> SIMPROGRESS=green;
+
+      <I><FONT COLOR=#808080>-- default values</FONT></I>
+        <FONT COLOR=#FF6347>RstxRB</FONT>      <= '0';               <I><FONT COLOR=#808080>-- Resets Active</FONT></I>
+        <FONT COLOR=#1E90FF>FinBlockxS</FONT>  <= '0';             
+        <FONT COLOR=#1E90FF>InWrEnxS</FONT>    <= '0';               <I><FONT COLOR=#808080>-- No enable yet</FONT></I>
+        <FONT COLOR=#804040>DataInxD</FONT>    <= ( <B>others</B> => '0');  <I><FONT COLOR=#808080>-- all zeroes per default</FONT></I>
+');  <I><FONT COLOR=#808080>-- initially no expectation</FONT></I>
+        <B>wait</B> <B>for</B> resetactivetime;       <I><FONT COLOR=#808080>-- Wait until reset is over</FONT></I>
+        <FONT COLOR=#FF6347>RstxRB</FONT> <= '1';                  <I><FONT COLOR=#808080>-- take reset back</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Initial Vector</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+      <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT>='1';
+        STIMULI <= GetStimuliRecord(stimulifile);
+
+        <B>wait</B> <B>for</B> stimulusapplicationtime;  <I><FONT COLOR=#808080>-- wait until the right time</FONT></I>
+        <FONT COLOR=#1E90FF>InWrEnxS</FONT>   <= '1';                 
+        <FONT COLOR=#804040>DataInxD</FONT>   <= STIMULI.<FONT COLOR=#804040>DataInxD</FONT>;
+        <FONT COLOR=#1E90FF>FinBlockxS</FONT> <= STIMULI.<FONT COLOR=#1E90FF>FinBlockxS</FONT>;  <I><FONT COLOR=#808080>-- delay no more needed.. </FONT></I>
+        <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>ClkxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxC</FONT>='1';  <I><FONT COLOR=#808080>-- make sure data is clocked in</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Start Loop</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+     <I><FONT COLOR=#808080>-- process until we run out of stimuli</FONT></I>
+      <FONT COLOR=#0000C0>appli_loop</FONT> : <B>while</B> <B>not</B> (endfile(stimulifile)) <B>loop</B>
+        <B>wait</B> <B>for</B> stimulusapplicationtime;
+        <FONT COLOR=#1E90FF>InWrEnxS</FONT>   <= '0';                 <I><FONT COLOR=#808080>-- no longer needed</FONT></I>
+        <FONT COLOR=#1E90FF>FinBlockxS</FONT> <= '0';                 <I><FONT COLOR=#808080>-- should be sampled</FONT></I>
+        <FONT COLOR=#804040>ExpRespxD</FONT>  <= STIMULI.<FONT COLOR=#804040>DigestxD</FONT>;    <I><FONT COLOR=#808080>-- we need a slight delay here </FONT></I>
+
+     <I><FONT COLOR=#808080>-- wait the cycles until the PenUltCyclexS arrives</FONT></I>
+     <I><FONT COLOR=#808080>-- This is the penultimate cycle. Everything will be clear after this</FONT></I>
+        <FONT COLOR=#0000C0>done_loop</FONT> : <B>while</B> <FONT COLOR=#1E90FF>PenUltCyclexS</FONT> = '0' <B>loop</B>
+          <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>ClkxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxC</FONT>='1';
+          <B>wait</B> <B>for</B> responseacquisitiontime;
+        <B>end</B> <B>loop</B> <FONT COLOR=#0000C0>done_loop</FONT>;
+        
+     <I><FONT COLOR=#808080>-- now we have donexS</FONT></I>
+        STIMULI <= GetStimuliRecord(stimulifile);  <I><FONT COLOR=#808080>-- read a new value</FONT></I>
+        
+        <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>ClkxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxC</FONT>='1';
+        <B>wait</B> <B>for</B> stimulusapplicationtime;
+        <FONT COLOR=#1E90FF>InWrEnxS</FONT> <= '1';                <I><FONT COLOR=#808080>-- new data is here</FONT></I>
+        <FONT COLOR=#804040>DataInxD</FONT> <= STIMULI.<FONT COLOR=#804040>DataInxD</FONT>;   <I><FONT COLOR=#808080>-- apply new data;</FONT></I>
+        <FONT COLOR=#1E90FF>FinBlockxS</FONT> <= STIMULI.<FONT COLOR=#1E90FF>FinBlockxS</FONT>;  <I><FONT COLOR=#808080>-- apply new FinBlockxS</FONT></I>
+
+        <I><FONT COLOR=#808080>-- note that the expected response and FinBlockxS will be updated in the</FONT></I>
+        <I><FONT COLOR=#808080>-- next cycle. The last values are still used in this cycle</FONT></I>
+
+        <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT>='1';
+        <I><FONT COLOR=#808080>-- loop until all stimuli have been processed</FONT></I>
+      <B>end</B> <B>loop</B> <FONT COLOR=#0000C0>appli_loop</FONT>;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Final Vector We applied the last vector, let us wait for the result </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- read the last one as well</FONT></I>
+      <B>wait</B> <B>for</B> stimulusapplicationtime;
+      <FONT COLOR=#1E90FF>InWrEnxS</FONT> <= '0';                   <I><FONT COLOR=#808080>-- no longer needed</FONT></I>
+      <FONT COLOR=#1E90FF>FinBlockxS</FONT> <= '0';                 <I><FONT COLOR=#808080>-- should be sampled</FONT></I>
+      <FONT COLOR=#804040>ExpRespxD</FONT>  <= STIMULI.<FONT COLOR=#804040>DigestxD</FONT>;    <I><FONT COLOR=#808080>-- we need a slight delay here </FONT></I>
+
+     <I><FONT COLOR=#808080>-- wait the cycles until the PenUltCyclexS arrives</FONT></I>
+     <I><FONT COLOR=#808080>-- This is the penultimate cycle. Everything will be clear after this</FONT></I>
+        <FONT COLOR=#0000C0>last_loop</FONT> : <B>while</B> <FONT COLOR=#1E90FF>PenUltCyclexS</FONT> = '0' <B>loop</B>
+          <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>ClkxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxC</FONT>='1';
+          <B>wait</B> <B>for</B> responseacquisitiontime;
+        <B>end</B> <B>loop</B> <FONT COLOR=#0000C0>last_loop</FONT>;
+
+       <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT>='1';
+       <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT>='1';
+
+
+<I><FONT COLOR=#808080>-- now we are done </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+      
+     SIMPROGRESS <= red;
+     <B>wait</B>;
+   <B>end</B> <B>process</B> <FONT COLOR=#0000C0>Tb_stimappli</FONT>;
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Check for output responses only</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+  
+   <FONT COLOR=#0000C0>tb_respcheck</FONT>: <B>process</B>
+      <I><FONT COLOR=#808080>-- variables for accounting of mismatching responses</FONT></I>
+      <B>variable</B> respmatch : respmatchtype;
+      <B>variable</B> respaccount : respaccounttype := (0,0,0,0,0);
+      <B>variable</B> out_line : line;      
+      
+   <B>begin</B>  <I><FONT COLOR=#808080>-- process tb_respcheck</FONT></I>
+    <I><FONT COLOR=#808080>-- wait for start sign</FONT></I>
+    <B>wait</B> <B>until</B> SIMPROGRESS=green;
+    
+    <B>while</B> SIMPROGRESS = green <B>loop</B> 
+      <B>wait</B> <B>until</B> <FONT COLOR=#32CD32>CLKxC</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxC</FONT>='1';
+      <B>wait</B> <B>for</B> responseacquisitiontime;
+
+      <B>if</B> <FONT COLOR=#1E90FF>OutWrEnxS</FONT> = '1' <B>then</B>           <I><FONT COLOR=#808080>-- we have a comparison value</FONT></I>
+             CheckResponse(<FONT COLOR=#804040>DigestxD</FONT>,<FONT COLOR=#804040>ExpRespxD</FONT>,respmatch,respaccount);
+             <B>if</B> respmatch /= mok <B>then</B>   <I><FONT COLOR=#808080>-- is there a mismatch ?? </FONT></I>
+                   PutSimulationReportFailure(<FONT COLOR=#804040>DigestxD</FONT>,<FONT COLOR=#804040>ExpRespxD</FONT>,respmatch);
+             <B>else</B>
+                   <B>write</B>(out_line,string'("  -> Matching result at "));
+                   <B>write</B>(out_line,now);
+                   <B>writeline</B>(output,out_line);         
+             <B>end</B> <B>if</B>;
+       <B>end</B> <B>if</B>;
+    <B>end</B> <B>loop</B>;                           <I><FONT COLOR=#808080>-- sim green</FONT></I>
+    PutSimulationReportSummary(respaccount);
+
+
+    <B>wait</B>;                               <I><FONT COLOR=#808080>-- kill the queue</FONT></I>
+     
+   <B>end</B> <B>process</B> <FONT COLOR=#0000C0>tb_respcheck</FONT>;
+
+
+
+  
+<B>end</B> test;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

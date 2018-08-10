@@ -1,0 +1,55 @@
+# =============================================
+# ATHENA - Automated Tool for Hardware EvaluatioN.
+# Copyright © 2009-2011 CERG at George Mason University <cryptography.gmu.edu>.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see http://www.gnu.org/licenses
+# or write to the Free Software Foundation,Inc., 51 Franklin Street,
+# Fifth Floor, Boston, MA 02110-1301  USA.
+# =============================================
+
+
+# List of source files in the order of compilation. 
+# Low level modules first, top level entity last
+
+sha3_pkg.vhd
+regn.vhd
+countern.vhd
+decountern.vhd
+d_ff.vhd
+sha3_fsm3.vhd
+sipo.vhd
+sr_reg.vhd
+aes_sbox_logic.vhd
+aes_sbox.vhd
+aes_mul.vhd
+aes_mixcolumn.vhd
+aes_shiftrow.vhd
+aes_round.vhd
+piso.vhd
+shavite3_pkg.vhd
+shavite3_key_gen.vhd
+shavite3_double_key_gen.vhd
+shavite3_fsm1.vhd
+shavite3_fsm2.vhd
+shavite3_double_fsm2.vhd
+shavite3_fsm3.vhd
+shavite3_round.vhd
+shavite3_double_round.vhd
+shavite3_control.vhd
+shavite3_double_control.vhd
+shavite3_datapath.vhd
+shavite3_double_datapath.vhd
+shavite3_256.vhd
+shavite3_512.vhd
+shavite3_top.vhd

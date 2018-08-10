@@ -1,0 +1,5 @@
+`include "Skein_core.v"   
+`include "skein_interface.v"
+`include "Skein_keyschedule.v"
+`include "Skein_mix.v"
+`include "skein_top.v"

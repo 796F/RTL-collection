@@ -1,0 +1,274 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/gmu_sha2_control.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-11 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee ;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha2_pkg.all;
+
+<B>entity</B> gmu_sha2_control <B>is</B>	
+	<B>generic</B> ( 
+		a : integer := LOG_2_64
+	);
+	<B>port</B>(	
+		clk						:<B>in</B> std_logic;
+		rst						:<B>in</B> std_logic;	  
+		
+		<I><FONT COLOR=#808080>-- to datpath</FONT></I>
+		sel2					:<B>out</B> std_logic;
+		sel						:<B>out</B> std_logic;
+		sel_gh					:<B>out</B> std_logic;
+		sel_gh2					:<B>out</B> std_logic;
+		wr_data					:<B>out</B> std_logic;
+		kw_wr					:<B>out</B> std_logic;
+		wr_state				:<B>out</B> std_logic;
+		wr_result				:<B>out</B> std_logic;						  
+		init_reg				:<B>out</B> std_logic;
+		init_block				:<B>out</B> std_logic;
+		rd_num					:<B>out</B> std_logic_vector(a-1 <B>downto</B> 0);
+		
+		<I><FONT COLOR=#808080>-- external</FONT></I>
+		<FONT COLOR=#1E90FF>InWrEnxSI</FONT>				: <B>in</B> std_logic;
+		<FONT COLOR=#1E90FF>FinBlockxSI</FONT>				: <B>in</B> std_logic;	
+		<FONT COLOR=#1E90FF>OutWrEnxSO</FONT>				: <B>out</B> std_logic;
+		<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> 			: <B>out</B> std_logic
+	);
+<B>end</B> gmu_sha2_control;
+
+
+
+<B>architecture</B> asic_controller <B>of</B> gmu_sha2_control <B>is</B>
+
+
+    <B>type</B> state_type <B>is</B> (
+						prep_data,
+						wr_get_data, 
+						kw_compute, 
+						data, 
+						data_end, 
+						dummy, 
+						computation, 
+						computation_end, 
+						result_delay, 
+						result_delay2, 
+						result_delay3, 	
+						result, 
+						mux_gh,
+						send_data, 
+						done);
+
+	<B>signal</B> next_state, current_state: state_type;
+	attribute enum_encoding : string;
+						 
+	<B>signal</B> roundCtr : std_logic_vector(a-1 <B>downto</B> 0);
+	<B>signal</B> incRoundCtr, loadRoundCtr : std_logic;
+	<B>signal</B> lastBlockFlag, lastBlockSet, lastBlockClr : std_logic;  	  
+	<B>signal</B> nextBlockIsLastFlag, nextBlockIsLastSet : std_logic;
+	<B>signal</B> loadFinFlagReg, computedFinFlagReg : std_logic;
+	<B>signal</B> loadFinFlag, computedFinFlag : std_logic;
+<B>begin</B>
+	roundCtrProc:
+		<B>process</B>( rst, clk )
+		<B>begin</B>
+			<B>if</B> (rst = '0') <B>then</B>
+				roundCtr <= (<B>others</B> => '0');
+			<B>elsif</B> rising_edge( clk ) <B>then</B>
+				<B>if</B> loadRoundCtr = '1' <B>then</B>
+					roundCtr <= (<B>others</B> => '0');					
+				<B>elsif</B> incRoundCtr = '1' <B>then</B>
+					roundCtr <= roundCtr + 1;
+				<B>end</B> <B>if</B>;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>; 
+		rd_num <= roundCtr;
+		
+    <FONT COLOR=#0000C0>state_reg</FONT>: <B>process</B>(clk, rst)
+	    <B>begin</B>
+			<B>if</B> (rst='0') <B>then</B>
+				current_state <= done; <I><FONT COLOR=#808080>-- set to done to reset all the flags</FONT></I>
+			<B>elsif</B> (clk'<B><I>event</I></B> <B>and</B> clk='1') <B>then</B>
+				current_state <= next_state;
+			<B>end</B> <B>if</B>;
+	    <B>end</B> <B>process</B>;
+		
+
+	<FONT COLOR=#0000C0>roundCompareRegister</FONT> : <B>process</B>( clk, rst )
+		<B>begin</B>
+			<B>if</B> (rst='0') <B>then</B>
+				loadFinFlagReg <= '0';
+				computedFinFlagReg <= '0';
+			<B>elsif</B> (clk'<B><I>event</I></B> <B>and</B> clk='1') <B>then</B>
+				loadFinFlagReg 	<= loadFinFlag;
+				computedFinFlagReg <= computedFinFlag;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;	   
+		
+	loadFinFlag 	<= '1' <B>when</B> roundCtr = 11 <B>else</B> '0';
+	computedFinFlag <= '1' <B>when</B> roundCtr = 59 <B>else</B> '0';
+
+    <FONT COLOR=#0000C0>comb_logic</FONT>: <B>process</B>(current_state, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, loadFinFlagReg, computedFinFlagReg, lastBlockFlag)
+	    <B>begin</B>
+			<B>case</B> current_state <B>is</B>
+				<B>when</B> prep_data => 
+					<B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+						next_state <= wr_get_data;
+					<B>else</B>
+						next_state <= prep_data;
+					<B>end</B> <B>if</B>;
+		
+			    <B>when</B> wr_get_data =>					
+					next_state <= kw_compute;					
+		
+				<B>when</B> kw_compute =>	
+					next_state <= data;
+		
+			    <B>when</B> data =>	
+					<B>if</B> loadFinFlagReg='1' <B>then</B>               
+		                next_state <= data_end;
+		           	<B>else</B>
+		            	next_state <= data;
+					<B>end</B> <B>if</B>;
+			
+			    <B>when</B> data_end =>	
+					next_state <= dummy;
+		
+				<B>when</B> dummy =>	
+					next_state <= computation;						
+		
+			    <B>when</B> computation =>	
+					<B>if</B> computedFinFlagReg='1' <B>then</B>
+					    next_state <= computation_end;
+					<B>else</B>
+					    next_state <= computation;
+					<B>end</B> <B>if</B>;
+		
+				<B>when</B> computation_end=>			
+					next_state <= result_delay;
+									  
+				<B>when</B> result_delay=>	
+						next_state <= result_delay2;
+		
+				<B>when</B> result_delay2=>
+						next_state <= result_delay3;
+		
+				<B>when</B> result_delay3=>	
+					<B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT>='1' <B>or</B> lastBlockFlag = '1' <B>then</B>
+						next_state <= result; 
+					<B>else</B>
+						next_state <= result_delay3;
+					<B>end</B> <B>if</B>;
+			    <B>when</B> result =>	
+					<B>if</B> lastBlockFlag='1' <B>then</B>
+						next_state <= send_data;   
+					<B>else</B>
+						next_state <= mux_gh;					
+					<B>end</B> <B>if</B>;	
+			
+				<B>when</B> mux_gh =>			   <I><FONT COLOR=#808080>-- if message not done</FONT></I>
+					next_state <= data;					
+		
+			    <B>when</B> send_data =>	
+					next_state <= done;					
+				<B>when</B> done =>
+					next_state <= prep_data; 	
+			<B>end</B> <B>case</B>;
+	    <B>end</B> <B>process</B>;
+	
+	wr_data <= '1' <B>when</B>  
+	(<FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1'  <B>and</B> 
+		((current_state=prep_data) 	
+		<B>or</B> (current_state=result_delay3 <B>and</B> lastBlockFlag = '0'))
+	)
+	<B>or</B> (current_state=dummy)
+	<B>or</B> (current_state=result)  
+	<B>or</B> (current_state=mux_gh) 																			 
+	<B>or</B> (current_state=result)
+	<B>or</B> (current_state=wr_get_data) <B>or</B> (current_state=kw_compute) <B>or</B> (current_state=data) <B>or</B> (current_state=data_end)
+	<B>or</B> (current_state=computation) <B>or</B> (current_state=computation_end) <B>or</B> (current_state=result_delay) <B>or</B> (current_state=result_delay2) 
+	<B>else</B> '0'; 
+
+ 	wr_result<= '1' <B>when</B>  (current_state= result_delay) 
+	<B>or</B> (current_state= result_delay2) 
+	<B>or</B> (current_state= result_delay3 <B>and</B> (<FONT COLOR=#1E90FF>InWrEnxSI</FONT>='1' <B>or</B> lastBlockFlag = '1'))  
+	<B>or</B> (current_state=result) 
+	<B>or</B> current_state=send_data <B>else</B> '0';
+		
+
+	wr_state <= '1' <B>when</B> 
+	((<FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>or</B> lastBlockFlag = '1') <B>and</B> (current_state=result_delay3))
+	<B>or</B> (current_state=data_end) 
+	<B>or</B> (current_state=dummy) 
+	<B>or</B> (current_state = kw_compute)
+	<B>or</B> (current_state = data) 
+	<B>or</B> (current_state=result)  
+	<B>or</B> (current_state=mux_gh) 
+	<B>or</B> (current_state=computation <B>or</B> current_state=computation_end <B>or</B> current_state=result_delay <B>or</B> current_state=result_delay2)  
+	<B>else</B> '0';
+	
+	incRoundCtr <= '1' <B>when</B> 
+	(current_state=wr_get_data) 
+	<B>or</B> (current_state=kw_compute)
+	<B>or</B> (current_state=data) 
+	<B>or</B> (current_state=data_end) 	
+	<B>or</B> (current_state=dummy)		
+	<B>or</B> (current_state=mux_gh)
+	<B>or</B> (current_state=result <B>and</B> lastBlockFlag = '0') 
+	<B>or</B> (current_state=computation) <B>or</B> (current_state=computation_end) <B>or</B> (current_state=result_delay) <B>or</B> (current_state=result_delay2)  
+	<B>else</B> '0';				 
+	
+	loadRoundCtr <= '1' <B>when</B> (current_state=done) <B>else</B> '0';
+	init_reg <= loadRoundCtr;
+	
+	kw_wr <='1' <B>when</B> 
+	(current_state=kw_compute) 
+	<B>or</B> (current_state = wr_get_data)
+	<B>or</B> (current_state=data) 
+	<B>or</B> (current_state=data_end) 
+	<B>or</B> (current_state=dummy)		  
+	<B>or</B> ((current_state=result <B>or</B> current_state=mux_gh) <B>and</B> lastBlockFlag = '0')
+	<B>or</B> (current_state=computation) <B>or</B> (current_state=computation_end) <B>or</B> (current_state=result_delay) <B>or</B> (current_state=result_delay2)  
+	<B>else</B> '0';
+		
+	sel	<= '1' <B>when</B> (current_state=result) <B>else</B> '0';
+	
+	init_block <= '1' <B>when</B> (current_state=result_delay3) <B>or</B> (current_state=prep_data) <B>else</B> '0'; 
+	sel2 <='1' <B>when</B>  (current_state=computation) <B>or</B> (current_state=computation_end) <B>or</B> (current_state=result_delay)  <B>else</B> '0';
+
+	sel_gh <= '1' <B>when</B> (current_state=wr_get_data) <B>or</B> (current_state=result)  <B>else</B> '0';
+
+	sel_gh2 <= '1' <B>when</B>  (current_state=result) <B>else</B> '0';
+	
+	<FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= '1' <B>when</B> (current_state=send_data) <B>else</B> '0';		  
+	
+	lastBlockInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => lastBlockSet, clr => lastBlockClr, output => lastBlockFlag );
+	lastBlockSet <= '1' <B>when</B> ((current_state = prep_data ) <B>and</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT> = '1' <B>and</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1')) <B>or</B>
+							 (current_state = mux_gh <B>and</B> nextBlockIsLastFlag = '1') <B>else</B> '0';
+	lastBlockClr <= '1' <B>when</B> (current_state = send_data) <B>else</B> '0';	
+	
+	nextBlockIslastInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => nextBlockIsLastSet, clr => lastBlockClr, output => nextBlockIsLastFlag );
+	nextBlockIsLastSet <= '1' <B>when</B> (current_state = result_delay3 <B>and</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT> = '1' <B>and</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1')) <B>else</B> '0';
+
+	<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1' <B>when</B> (current_state = result_delay2 <B>and</B> lastBlockFlag = '0') <B>or</B> (current_state = done) <B>else</B> '0';	
+	
+<B>end</B> asic_controller;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

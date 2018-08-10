@@ -1,0 +1,431 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/simulstuff.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Modified version of the simulstuff</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : simulstuff.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-22</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-22</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: This is a branch from the original simulstuff by H. Kaeslin et</FONT></I>
+<I><FONT COLOR=#808080>--              al. It was slightly modified for Acacia. In the Shabziger</FONT></I>
+<I><FONT COLOR=#808080>--              project we have modified that it does not use an output file</FONT></I>
+<I><FONT COLOR=#808080>--              A single file is used to read in the stimuli</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-22  1.0      kgf	Created</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>use</B> std.textio.all;
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_textio.all;   <I><FONT COLOR=#808080>-- read and write overloaded for std_logic</FONT></I>
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.math_real.Uniform;      <I><FONT COLOR=#808080>-- IEEE 1076.2 real math package</FONT></I>
+<B>use</B> ieee.math_real.Trunc;
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<I><FONT COLOR=#808080>-- package declaration</FONT></I>
+<B>package</B> simulstuff <B>is</B>
+
+
+<I><FONT COLOR=#808080>-- kgf's silly vector 2 hex conversion.</FONT></I>
+   <B>procedure</B> four2hex
+     (p_line: <B>inout</B> line;
+      value : <B>in</B> std_logic_vector( 3 <B>downto</B> 0));
+   
+   <B>procedure</B>  vector2hex
+     (p_line: <B>inout</B> line;
+      vector : <B>in</B> std_logic_vector);
+  
+   <I><FONT COLOR=#808080>-- support for file handling</FONT></I>
+   <B>function</B> FileOpenMessage
+      (filename : string; status : file_open_status)
+      <B>return</B> string;
+   <B>procedure</B> GetFileEntry
+      (fileentry : <B>inout</B> std_logic_vector;
+       in_line, in_line_tmp : <B>inout</B> line; filename : string);
+   <B>procedure</B> GetFileEntry
+      (fileentry : <B>inout</B> std_logic;
+       in_line, in_line_tmp : <B>inout</B> line; filename : string);
+   <B>function</B> FileReadMessage
+      (filename : string; read_ok : boolean; lineread : string)
+      <B>return</B> string;
+
+   <I><FONT COLOR=#808080>-- support for process coordination, patterned after a traffic light</FONT></I>
+   <B>type</B> trafficlight <B>is</B> (
+      orange,   <I><FONT COLOR=#808080>-- simulation run is waiting to start</FONT></I>
+      green,    <I><FONT COLOR=#808080>-- simulation run is under way</FONT></I>
+      green2,   <I><FONT COLOR=#808080>-- idem but there are no expected responses left</FONT></I>
+      yellow,   <I><FONT COLOR=#808080>-- simulation run has exhausted its stimuli</FONT></I>
+      red );    <I><FONT COLOR=#808080>-- simulation run has completed</FONT></I>
+   <B>type</B> trafficlightvector <B>is</B> <B>array</B> (natural range <>) <B>of</B> trafficlight;
+   <B>function</B> ResolveTrafficLight
+      (argument : <B>in</B> trafficlightvector) <B>return</B> trafficlight;   
+
+   <I><FONT COLOR=#808080>-- support for evaluating responses from the MUT</FONT></I>
+   <B>type</B> respmatchtype <B>is</B> (
+      mok,   <I><FONT COLOR=#808080>-- o.k. = both logic value and drive strength do match</FONT></I>
+      mlf,   <I><FONT COLOR=#808080>-- logic fail = logic value or tristate status does not match</FONT></I>
+      msf,   <I><FONT COLOR=#808080>-- strength fail = weak instead of strong drive or viceversa</FONT></I>
+      mil ); <I><FONT COLOR=#808080>-- illegal response = actual response has value "don't care"</FONT></I>
+   <B>type</B> vectorwise_matchtable
+      <B>is</B> <B>array</B> (respmatchtype, respmatchtype) <B>of</B> respmatchtype;
+   <B>constant</B> check_vectorwise : vectorwise_matchtable := (
+      <I><FONT COLOR=#808080>--     ----------------------------------</FONT></I>
+      <I><FONT COLOR=#808080>--     | mok  mlf  msf  mil       |     |   </FONT></I>
+      <I><FONT COLOR=#808080>--     ----------------------------------</FONT></I>
+             ( mok, mlf, msf, mil ), <I><FONT COLOR=#808080>-- | mok |</FONT></I>
+             ( mlf, mlf, mlf, mil ), <I><FONT COLOR=#808080>-- | mlf |</FONT></I>
+             ( msf, mlf, msf, mil ), <I><FONT COLOR=#808080>-- | msf |</FONT></I>
+             ( mil, mlf, mil, mil )  <I><FONT COLOR=#808080>-- | mil |</FONT></I>
+             );   <I><FONT COLOR=#808080>-- symmetric, dimensions may be interchanged</FONT></I>
+   <B>type</B> respaccounttype <B>is</B> record
+      numberof_mch,  <I><FONT COLOR=#808080>-- number of responses checked so far</FONT></I>
+      numberof_mok,  <I><FONT COLOR=#808080>-- see above for this and all other fields</FONT></I>
+      numberof_mlf,
+      numberof_msf,
+      numberof_mil : natural;
+   <B>end</B> record;
+   <B>procedure</B> CheckResponse
+      (actresp, expresp : <B>in</B> std_logic_vector;
+       respmatch : <B>out</B> respmatchtype;
+       respaccount : <B>inout</B> respaccounttype);
+   <B>procedure</B> CheckResponse
+      (actresp, expresp : <B>in</B> std_logic;
+       respmatch : <B>out</B> respmatchtype;
+       respaccount : <B>inout</B> respaccounttype);   
+   <B>function</B> AnnotateFailureMessage
+      (respmatch : <B>in</B> respmatchtype) <B>return</B> string;
+   <B>procedure</B> PutSimulationReportSummary
+      (respaccount : <B>in</B> respaccounttype);
+
+   <I><FONT COLOR=#808080>-- support for generation of random test patterns</FONT></I>
+   <B>procedure</B> GenerateRandomVector
+      (randvectwidth : <B>in</B> natural;
+       statevar1, statevar2 : <B>inout</B> integer;
+       randvect : <B>out</B> std_logic_vector);   <I><FONT COLOR=#808080>-- unconstrained array type</FONT></I>
+
+<B>end</B> <B>package</B> <FONT COLOR=#0000C0>simulstuff</FONT>;
+
+<I><FONT COLOR=#808080>--=============================================================================</FONT></I>
+
+<I><FONT COLOR=#808080>-- package body</FONT></I>
+<B>package</B> body simulstuff <B>is</B>
+
+
+   <B>procedure</B> four2hex
+     (p_line: <B>inout</B> line;
+      value : <B>in</B> std_logic_vector( 3 <B>downto</B> 0))
+     <B>is</B>
+   <B>begin</B>  
+      <B>case</B> value <B>is</B>
+        <B>when</B> "0000" => <B>write</B> (p_line, string'("0")); 
+        <B>when</B> "0001" => <B>write</B> (p_line, string'("1")); 
+        <B>when</B> "0010" => <B>write</B> (p_line, string'("2")); 
+        <B>when</B> "0011" => <B>write</B> (p_line, string'("3")); 
+        <B>when</B> "0100" => <B>write</B> (p_line, string'("4")); 
+        <B>when</B> "0101" => <B>write</B> (p_line, string'("5")); 
+        <B>when</B> "0110" => <B>write</B> (p_line, string'("6")); 
+        <B>when</B> "0111" => <B>write</B> (p_line, string'("7")); 
+        <B>when</B> "1000" => <B>write</B> (p_line, string'("8")); 
+        <B>when</B> "1001" => <B>write</B> (p_line, string'("9")); 
+        <B>when</B> "1010" => <B>write</B> (p_line, string'("a")); 
+        <B>when</B> "1011" => <B>write</B> (p_line, string'("b")); 
+        <B>when</B> "1100" => <B>write</B> (p_line, string'("c")); 
+        <B>when</B> "1101" => <B>write</B> (p_line, string'("d")); 
+        <B>when</B> "1110" => <B>write</B> (p_line, string'("e")); 
+        <B>when</B> "1111" => <B>write</B> (p_line, string'("f")); 
+        <B>when</B> <B>others</B> => <B>write</B> (p_line, string'("X"));
+      <B>end</B> <B>case</B>;
+   <B>end</B> <B>procedure</B> <FONT COLOR=#0000C0>four2hex</FONT>;
+
+  
+   <B>procedure</B>  vector2hex
+     (p_line: <B>inout</B> line;
+      vector : <B>in</B> std_logic_vector)
+   <B>is</B>
+     <B>variable</B> a : std_logic_vector( vector'<B><I>length</I></B>-1 <B>downto</B> 0 ):= vector ;
+     <B>variable</B> i : natural;
+     <B>variable</B> steps : natural; 
+     <B>variable</B> b : std_logic_vector( 3 <B>downto</B> 0);
+     <B>variable</B> extra_bits : boolean;
+   <B>begin</B>
+     extra_bits := true;
+     b := "0000";
+
+     i := a'<B><I>length</I></B>;
+     
+     <B>if</B> (i mod 4 = 1) <B>then</B>
+       b := "000" & a (i-1);
+       i := i-1 ;
+     <B>elsif</B> (i mod 4 = 2) <B>then</B>
+       b := "00" & a(i-1 <B>downto</B> i-2); 
+       i := i-2;
+     <B>elsif</B> (i mod 4 = 3) <B>then</B>
+       b := '0' & a(i-1 <B>downto</B> i-3);
+       i := i-3;
+     <B>else</B>
+       extra_bits := false;
+     <B>end</B> <B>if</B>; 
+
+    <B>if</B> extra_bits <B>then</B>
+      four2hex(p_line,b);
+    <B>end</B> <B>if</B>;
+     
+    steps := (i / 4) - 1;
+    <B>for</B> j <B>in</B> 0 <B>to</B> steps <B>loop</B>
+      b:= a ( (steps-j)*4+3 <B>downto</B> (steps-j)*4);
+      four2hex(p_line,b);
+    <B>end</B> <B>loop</B>; 
+   <B>end</B> vector2hex;
+
+  
+   <I><FONT COLOR=#808080>-- purpose: translate file open status into a human-readable text string.</FONT></I>
+   <B>function</B> FileOpenMessage (filename : string; status : file_open_status)
+      <B>return</B> string <B>is</B>
+   <B>begin</B>
+      <B>case</B> status <B>is</B>
+         <B>when</B> open_ok => <B>return</B> "<B>File</B> "& filename &" opened successfully.";
+         <B>when</B> status_error => <B>return</B> "<B>File</B> "& filename &" already opened.";
+         <B>when</B> name_error => <B>return</B>
+            "<B>File</B> "& filename &" does <B>not</B> exist <B>or</B> can <B>not</B> be created.";
+         <B>when</B> mode_error => <B>return</B>
+            "<B>File</B> "& filename &" can <B>not</B> be opened <B>in</B> <B>write</B> <B>or</B> append mode.";
+      <B>end</B> <B>case</B>;
+   <B>end</B> FileOpenMessage;
+
+   <I><FONT COLOR=#808080>-- purpose: get one entry from the stimuli or expected responses file.</FONT></I>
+   <B>procedure</B> GetFileEntry
+      (fileentry : <B>inout</B> std_logic_vector;
+       in_line, in_line_tmp : <B>inout</B> line;
+       filename : string)
+   <B>is</B>
+      <B>variable</B> read_ok : boolean;
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- extract next entry to obtain the value of formal variable fileentry</FONT></I>
+      read(in_line,fileentry,read_ok);
+      <B>if</B> <B>not</B> read_ok <B>then</B>
+         <B>report</B> FileReadMessage(filename,read_ok,in_line_tmp.all)
+            severity error;
+      <B>end</B> <B>if</B>;
+   <B>end</B> GetFileEntry;
+
+   <I><FONT COLOR=#808080>-- purpose: above procedure overloaded for scalars rather than vectors.</FONT></I>
+   <B>procedure</B> GetFileEntry
+      (fileentry : <B>inout</B> std_logic;
+       in_line, in_line_tmp : <B>inout</B> line; filename : string)
+   <B>is</B>
+      <B>variable</B> read_ok : boolean;
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- extract next entry to obtain the value of formal variable fileentry</FONT></I>
+      read(in_line,fileentry,read_ok);
+      <B>if</B> <B>not</B> read_ok <B>then</B>
+         <B>report</B> FileReadMessage(filename,read_ok,in_line_tmp.all)
+            severity error;
+      <B>end</B> <B>if</B>;
+   <B>end</B> GetFileEntry;
+
+   <I><FONT COLOR=#808080>-- purpose: translate file read status into a human-readable text string.</FONT></I>
+   <B>function</B> FileReadMessage
+      (filename : string;
+       read_ok : boolean; lineread : string)
+      <B>return</B> string <B>is</B>
+   <B>begin</B>
+      <B>if</B> read_ok=true <B>then</B>
+         <B>return</B> "Line `"& lineread &"' sucessfully read from <B>file</B> "
+            & filename &".";
+      <B>else</B>
+         <B>return</B> "Missing <B>or</B> unsuitable entry found <B>while</B> reading line `"
+            & lineread &"' from <B>file</B> "& filename &".";
+      <B>end</B> <B>if</B>;
+   <B>end</B> FileReadMessage;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+   <I><FONT COLOR=#808080>-- purpose: determine actual status of simulation run,</FONT></I>
+   <I><FONT COLOR=#808080>--    argument simply overwrites previous signal value</FONT></I>
+   <I><FONT COLOR=#808080>--    as simulation progress never moves back.</FONT></I>
+   <B>function</B> ResolveTrafficLight
+      (argument : <B>in</B> trafficlightvector) <B>return</B> trafficlight
+   <B>is</B>
+      <B>type</B> trafficlighttable <B>is</B> <B>array</B> (trafficlight, trafficlight)
+         <B>of</B> trafficlight;
+      <B>constant</B> colortable : trafficlighttable := (
+      <I><FONT COLOR=#808080>--     --------------------------------------------------</FONT></I>
+      <I><FONT COLOR=#808080>--     |  orange   green    green2   yellow   red       |        |</FONT></I>
+      <I><FONT COLOR=#808080>--     --------------------------------------------------</FONT></I>
+             ( orange,   green,   green2,  yellow,  red ), <I><FONT COLOR=#808080>-- | orange |</FONT></I>
+             ( green,    green,   green2,  yellow,  red ), <I><FONT COLOR=#808080>-- | green  |</FONT></I>
+             ( green2,   green2,  green2,  yellow,  red ), <I><FONT COLOR=#808080>-- | green2 |</FONT></I>
+             ( yellow,   yellow,  yellow,  yellow,  red ), <I><FONT COLOR=#808080>-- | yellow |</FONT></I>
+             ( red,      red,     red,     red,     red )  <I><FONT COLOR=#808080>-- | red    |</FONT></I>
+             );   <I><FONT COLOR=#808080>-- commutative, dimensions may be interchanged</FONT></I>
+      <B>variable</B> result: trafficlight := orange;
+   <B>begin</B>
+      <B>for</B> i <B>in</B> argument'range <B>loop</B>
+         result := colortable(result,argument(i));
+      <B>end</B> <B>loop</B>;
+      <B>return</B> result;
+   <B>end</B> ResolveTrafficLight;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+   <I><FONT COLOR=#808080>-- purpose: check to what extent actual and expected responses match,</FONT></I>
+   <I><FONT COLOR=#808080>--    return a grade, and update failure account record accordingly.</FONT></I>
+   <B>procedure</B> CheckResponse
+      (actresp, expresp : <B>in</B> std_logic_vector;
+       respmatch : <B>out</B> respmatchtype;
+       respaccount : <B>inout</B> respaccounttype)
+   <B>is</B>
+      <B>type</B> bitwise_matchtable <B>is</B> <B>array</B> (std_logic, std_logic) <B>of</B> respmatchtype;
+      <B>constant</B> check_bitwise : bitwise_matchtable := (
+      <I><FONT COLOR=#808080>--     ---------------------------------------------------------</FONT></I>
+      <I><FONT COLOR=#808080>-- exp |  U    X    0    1    Z    W    L    H    -        |act|  </FONT></I>
+      <I><FONT COLOR=#808080>--     ---------------------------------------------------------</FONT></I>
+             ( mok, mlf, mlf, mlf, mlf, mlf, mlf, mlf, mok ), <I><FONT COLOR=#808080>-- | U |</FONT></I>
+             ( mlf, mok, mlf, mlf, mlf, msf, mlf, mlf, mok ), <I><FONT COLOR=#808080>-- | X |</FONT></I>
+             ( mlf, mlf, mok, mlf, mlf, mlf, msf, mlf, mok ), <I><FONT COLOR=#808080>-- | 0 |</FONT></I>
+             ( mlf, mlf, mlf, mok, mlf, mlf, mlf, msf, mok ), <I><FONT COLOR=#808080>-- | 1 |</FONT></I>
+             ( mlf, mlf, mlf, mlf, mok, mlf, mlf, mlf, mok ), <I><FONT COLOR=#808080>-- | Z |</FONT></I>
+             ( mlf, msf, mlf, mlf, mlf, mok, mlf, mlf, mok ), <I><FONT COLOR=#808080>-- | W |</FONT></I>
+             ( mlf, mlf, msf, mlf, mlf, mlf, mok, mlf, mok ), <I><FONT COLOR=#808080>-- | L |</FONT></I>
+             ( mlf, mlf, mlf, msf, mlf, mlf, mlf, mok, mok ), <I><FONT COLOR=#808080>-- | H |</FONT></I>
+             ( mil, mil, mil, mil, mil, mil, mil, mil, mil )  <I><FONT COLOR=#808080>-- | - |</FONT></I>
+             );   <I><FONT COLOR=#808080>-- act is the 1st and exp the 2nd dimension</FONT></I>
+      <B>variable</B> bitwise_match, vectorwise_match : respmatchtype := mok;     
+   <B>begin</B>
+      <B>assert</B> expresp'<B><I>length</I></B>=actresp'<B><I>length</I></B> <B>and</B> expresp'<B><I>length</I></B>>0
+         <B>report</B> " Cardinality <B>of</B> response does <B>not</B> match <B>or</B> <B>is</B> zero."
+         severity warning;
+      <B>for</B> i <B>in</B> expresp'range <B>loop</B>
+         bitwise_match := check_bitwise(actresp(i),expresp(i));
+         vectorwise_match := check_vectorwise(vectorwise_match,bitwise_match);
+      <B>end</B> <B>loop</B>;
+      respmatch := vectorwise_match;
+      <B>case</B> vectorwise_match <B>is</B>
+         <B>when</B> mok => respaccount.numberof_mok := respaccount.numberof_mok +1;
+         <B>when</B> mlf => respaccount.numberof_mlf := respaccount.numberof_mlf +1;
+         <B>when</B> msf => respaccount.numberof_msf := respaccount.numberof_msf +1;
+         <B>when</B> mil => respaccount.numberof_mil := respaccount.numberof_mil +1;
+      <B>end</B> <B>case</B>;
+      respaccount.numberof_mch := respaccount.numberof_mch +1;
+   <B>end</B> CheckResponse;
+
+   <I><FONT COLOR=#808080>-- purpose: above procedure overloaded for scalars rather than vectors.</FONT></I>
+   <B>procedure</B> CheckResponse
+      (actresp, expresp : <B>in</B> std_logic;
+       respmatch : <B>out</B> respmatchtype;
+       respaccount : <B>inout</B> respaccounttype)
+   <B>is</B>
+      <B>variable</B> actrespvector, exprespvector : std_logic_vector(0 <B>to</B> 0);    
+   <B>begin</B>
+      actrespvector(0) := actresp; exprespvector(0) := expresp;
+      CheckResponse(actrespvector,exprespvector,respmatch,respaccount);
+   <B>end</B> CheckResponse;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+   <I><FONT COLOR=#808080>-- purpose: generate a text string that comments on how a response matches.</FONT></I>
+   <B>function</B> AnnotateFailureMessage (respmatch : <B>in</B> respmatchtype)
+      <B>return</B> string <B>is</B>
+   <B>begin</B>
+      <B>case</B> respmatch <B>is</B>
+         <B>when</B> mok => <B>return</B> string'     <I><FONT COLOR=#808080>-- everything as expected</FONT></I>
+            ("^^ matched.            ");
+         <B>when</B> mlf => <B>return</B> string'     <I><FONT COLOR=#808080>-- wrong logic state or yes/no drive</FONT></I>
+            ("^^ failed logically!   ");
+         <B>when</B> msf => <B>return</B> string'     <I><FONT COLOR=#808080>-- wrong drive strength </FONT></I>
+            ("^^ failed <B>in</B> strength! ");
+         <B>when</B> <B>others</B> => <B>return</B> string'  <I><FONT COLOR=#808080>-- no legal logic value for simulation</FONT></I>
+            ("^^ failed illegally!   ");
+     <B>end</B> <B>case</B>;                         
+   <B>end</B> AnnotateFailureMessage;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+   <I><FONT COLOR=#808080>-- purpose: summarize simulation report and write it to report file.</FONT></I>
+   <B>procedure</B> PutSimulationReportSummary
+      (respaccount : <B>in</B> respaccounttype)
+   <B>is</B>
+      <B>variable</B> out_line : line;
+      
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- separator</FONT></I>
+      <B>write</B>(out_line,string'("% ======== Simulation <B>Report</B> Summary ========"));
+      <B>writeline</B>(output,out_line);
+      <I><FONT COLOR=#808080>-- 1st line</FONT></I>
+      <B>write</B>(out_line,string'("% A total <B>of</B> "));
+      <B>write</B>(out_line,respaccount.numberof_mch);
+      <B>write</B>(out_line,string'(" responses have been checked, <B>out</B> <B>of</B> which "));
+      <B>write</B>(out_line,respaccount.numberof_mok);
+      <B>write</B>(out_line,string'(" matched expectations."));       
+      <B>writeline</B>(output,out_line); <I><FONT COLOR=#808080>-- to screen ?? </FONT></I>
+      <I><FONT COLOR=#808080>-- 2nd line</FONT></I>
+      <B>assert</B> respaccount.numberof_mch /= respaccount.numberof_mok
+         <B>report</B> "All Results Match! " severity note;
+      <B>assert</B> respaccount.numberof_mch = respaccount.numberof_mok
+         <B>report</B> "ERRORS <B>in</B> Simulation" severity warning;
+   <B>end</B> PutSimulationReportSummary;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+   <I><FONT COLOR=#808080>-- purpose: generate binary random vectors of parametrized word width that </FONT></I>
+   <I><FONT COLOR=#808080>--    should be uniformly distributed over interval [0,2**randvectwidth-1].</FONT></I>
+   <I><FONT COLOR=#808080>-- limitation: mantissa of VHDL type reals has 23bits, so randvectwidth </FONT></I>
+   <I><FONT COLOR=#808080>--    must not exceed this value as outcome is otherwise uncertain.</FONT></I>
+   <I><FONT COLOR=#808080>-- note: state variables of procedure Uniform must be kept within the </FONT></I>
+   <I><FONT COLOR=#808080>--    calling process because variables in a subprogram do not persist.</FONT></I>
+   <I><FONT COLOR=#808080>-- findings: repeated calls of procedure ieee.math_real.Uniform with</FONT></I>
+   <I><FONT COLOR=#808080>--    identical seeds indeed result in identical pseudo random numbers.</FONT></I>
+   <B>procedure</B> GenerateRandomVector
+      (randvectwidth : <B>in</B> natural;
+       statevar1, statevar2 : <B>inout</B> integer;
+       randvect : <B>out</B> std_logic_vector)   <I><FONT COLOR=#808080>-- unconstrained array type</FONT></I>
+   <B>is</B>
+      <B>constant</B> upperbound : real := (2.0**randvectwidth)-1.0;
+      <B>variable</B> randreal01 : real := 0.0;
+      <B>variable</B> randscaled, randtruncd : real := 0.0;
+      <B>variable</B> randinteger : integer := 0;
+   <B>begin</B>
+      <I><FONT COLOR=#808080>-- obtain a random real in [0,1]</FONT></I>
+      Uniform(statevar1,statevar2,randreal01);
+      <I><FONT COLOR=#808080>-- rescale interval [0,1] to [0,upperbound]</FONT></I>
+      randscaled := randreal01*(upperbound+1.0);
+      <I><FONT COLOR=#808080>-- truncate to next smaller integer (still of type real, though)</FONT></I>
+      <B>if</B> randscaled/=(upperbound+1.0) <B>then</B> <I><FONT COLOR=#808080>-- almost always</FONT></I>
+         randtruncd := Trunc(randscaled);
+      <B>else</B> <I><FONT COLOR=#808080>-- avoid spillover when randreal01 was exactly 1.0</FONT></I>
+         randtruncd := 0.0; <I><FONT COLOR=#808080>-- 0.0 or upperbound is largely immaterial </FONT></I>
+      <B>end</B> <B>if</B>;
+      <I><FONT COLOR=#808080>-- convert to a binary vector</FONT></I>
+      randinteger := integer(randtruncd);
+      randvect := std_logic_vector(
+         <B>to_unsigned</B>(randinteger,randvectwidth));
+   <B>end</B> GenerateRandomVector;
+
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>end</B> <B>package</B> body simulstuff;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,299 @@
+<HTML>
+<TITLE>
+ ethz_sha2/sourcecode/ethz_sha2.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : SHA2 taken from sem10h7</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_sha2.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Köppel Benedikt;Schnydrig Mathias  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-01-13</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-10</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Top module around SHA256 to provide a clean interface to the</FONT></I>
+<I><FONT COLOR=#808080>-- outside world</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-01-13  1.0      sem10h7 Created</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-25  1.1      kgf     Changed entity name</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-09-10  1.2      kgf     Changed the Reset name frm RSTxRBI to RstxRBI</FONT></I>
+<I><FONT COLOR=#808080>--                              our compile script depends on this name. </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.shapkg.all;
+
+<B>entity</B> ethz_sha2 <B>is</B>
+  
+  
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+<I><FONT COLOR=#808080>--    ReadyxSO    : out std_logic;  -- is 1, when we are ready for a next message</FONT></I>
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#804040>TextInxDI</FONT>      : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- the message to encrypt, including all padding and stuff</FONT></I>
+    <FONT COLOR=#804040>HOutxDO</FONT>        : <B>out</B> std_logic_vector(255 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- the Hash output, if TextIn was the last message, or intermediary H values if not the last message</FONT></I>
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic
+    );
+
+
+<B>end</B> ethz_sha2;
+
+<B>architecture</B> behavioral <B>of</B> ethz_sha2 <B>is</B>
+
+  <B>component</B> SHA256Main
+    <B>port</B> (
+      <FONT COLOR=#804040>MessageInxDI</FONT>       : <B>in</B>  expmess_arr;
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>          : <B>in</B>  std_logic;
+      <FONT COLOR=#804040>HInxDI</FONT>             : <B>in</B>  h_arr;
+      <FONT COLOR=#32CD32>CLKxCI</FONT>             : <B>in</B>  std_logic;
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>            : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>        : <B>out</B> std_logic;
+      <FONT COLOR=#804040>HOutxDO</FONT>            : <B>out</B> h_arr;
+      <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>    : <B>in</B>  std_logic;
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>     : <B>out</B> std_logic;
+      <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> : <B>out</B> std_logic);
+  <B>end</B> <B>component</B>;
+
+  <B>type</B> state <B>is</B> (Idle, First, Waiting, Running);
+
+  <I><FONT COLOR=#808080>-- statemachine</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT> : state;
+  <B>signal</B> <FONT COLOR=#804040>StatexDN</FONT> : state;
+
+  <I><FONT COLOR=#808080>-- pipelining the inputs</FONT></I>
+<I><FONT COLOR=#808080>--  signal TextInxDP : std_logic_vector(511 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal TextInxDN : std_logic_vector(511 downto 0);</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>HxDP</FONT> : std_logic_vector(255 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>HxDN</FONT> : std_logic_vector(255 <B>downto</B> 0);
+
+  <I><FONT COLOR=#808080>-- pipelining the outputs</FONT></I>
+<I><FONT COLOR=#808080>--  signal HOutxDP : std_logic_vector(255 downto 0);</FONT></I>
+<I><FONT COLOR=#808080>--  signal HOutxDN : std_logic_vector(255 downto 0);</FONT></I>
+
+  <I><FONT COLOR=#808080>-- connect to SHA256Main</FONT></I>
+  <B>signal</B> <FONT COLOR=#804040>MessageInxD</FONT>       : expmess_arr;
+  <B>signal</B> <FONT COLOR=#804040>HInxD</FONT>             : h_arr;
+  <B>signal</B> <FONT COLOR=#804040>HOutxD</FONT>            : h_arr;
+  <B>signal</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>        : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>MessageReadyxS</FONT>    : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>MessageReceivedxS</FONT> : std_logic;
+
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxSN</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT> : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>   : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FirstBlockxS</FONT>             : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>PenUltCyclexS</FONT>            : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>ReadyxS</FONT>                  : std_logic;
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- behavioral</FONT></I>
+
+  SHA256Main_1 : SHA256Main
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>MessageInxDI</FONT>       => <FONT COLOR=#804040>MessageInxD</FONT>,
+      <FONT COLOR=#1E90FF>InWrEnxSI</FONT>          => <FONT COLOR=#1E90FF>InWrEnxSI</FONT>,
+      <FONT COLOR=#804040>HInxDI</FONT>             => <FONT COLOR=#804040>HInxD</FONT>,
+      <FONT COLOR=#32CD32>CLKxCI</FONT>             => <FONT COLOR=#32CD32>CLKxCI</FONT>,
+      <FONT COLOR=#FF6347>RSTxRBI</FONT>            => <FONT COLOR=#FF6347>RstxRBI</FONT>,
+      <FONT COLOR=#1E90FF>VALIDOUTxSO</FONT>        => <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>,
+      <FONT COLOR=#804040>HOutxDO</FONT>            => <FONT COLOR=#804040>HOutxD</FONT>,
+      <FONT COLOR=#1E90FF>MessageReadyxSI</FONT>    => <FONT COLOR=#1E90FF>MessageReadyxS</FONT>,
+      <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>     => <FONT COLOR=#1E90FF>PenUltCyclexS</FONT>,
+      <FONT COLOR=#1E90FF>MessageReceivedxSO</FONT> => <FONT COLOR=#1E90FF>MessageReceivedxS</FONT>);
+
+  <I><FONT COLOR=#808080>-- wire pipelined inputs</FONT></I>
+<I><FONT COLOR=#808080>--  MessageInxD TextInxDP(511 downto 480), TextInxDP(479 downto 448), TextInxDP(447 downto 416), TextInxDP(415 downto 384), TextInxDP(383 downto 352), TextInxDP(351 downto 320), TextInxDP(319 downto 288), TextInxDP(287 downto 256), TextInxDP(255 downto 224), TextInxDP(223 downto 192), TextInxDP(191 downto 160), TextInxDP(159 downto 128), TextInxDP(127 downto 96), TextInxDP(95 downto 64), TextInxDP(63 downto 32), TextInxDP(31 downto 0));</FONT></I>
+  <FONT COLOR=#804040>HInxD</FONT>       <= (<FONT COLOR=#804040>HxDP</FONT>(255 <B>downto</B> 224), <FONT COLOR=#804040>HxDP</FONT>(223 <B>downto</B> 192), <FONT COLOR=#804040>HxDP</FONT>(191 <B>downto</B> 160), <FONT COLOR=#804040>HxDP</FONT>(159 <B>downto</B> 128), <FONT COLOR=#804040>HxDP</FONT>(127 <B>downto</B> 96), <FONT COLOR=#804040>HxDP</FONT>(95 <B>downto</B> 64), <FONT COLOR=#804040>HxDP</FONT>(63 <B>downto</B> 32), <FONT COLOR=#804040>HxDP</FONT>(31 <B>downto</B> 0));
+  <FONT COLOR=#804040>MessageInxD</FONT> <= (<FONT COLOR=#804040>TextInxDI</FONT>(511 <B>downto</B> 480), <FONT COLOR=#804040>TextInxDI</FONT>(479 <B>downto</B> 448), <FONT COLOR=#804040>TextInxDI</FONT>(447 <B>downto</B> 416), <FONT COLOR=#804040>TextInxDI</FONT>(415 <B>downto</B> 384), <FONT COLOR=#804040>TextInxDI</FONT>(383 <B>downto</B> 352), <FONT COLOR=#804040>TextInxDI</FONT>(351 <B>downto</B> 320), <FONT COLOR=#804040>TextInxDI</FONT>(319 <B>downto</B> 288), <FONT COLOR=#804040>TextInxDI</FONT>(287 <B>downto</B> 256), <FONT COLOR=#804040>TextInxDI</FONT>(255 <B>downto</B> 224), <FONT COLOR=#804040>TextInxDI</FONT>(223 <B>downto</B> 192), <FONT COLOR=#804040>TextInxDI</FONT>(191 <B>downto</B> 160), <FONT COLOR=#804040>TextInxDI</FONT>(159 <B>downto</B> 128), <FONT COLOR=#804040>TextInxDI</FONT>(127 <B>downto</B> 96), <FONT COLOR=#804040>TextInxDI</FONT>(95 <B>downto</B> 64), <FONT COLOR=#804040>TextInxDI</FONT>(63 <B>downto</B> 32), <FONT COLOR=#804040>TextInxDI</FONT>(31 <B>downto</B> 0));
+
+
+  <FONT COLOR=#0000C0>p_calculate_next_state</FONT> : <B>process</B> (<FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>,
+                                    <FONT COLOR=#1E90FF>PenUltCyclexS</FONT>, <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_calculate_next_state</FONT></I>
+    <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '0';
+    <FONT COLOR=#1E90FF>ReadyxS</FONT>        <= '0';
+    <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>     <= (<FONT COLOR=#1E90FF>VALIDOUTxS</FONT> <B>and</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT>);
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     <= <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>;
+    <FONT COLOR=#1E90FF>FirstBlockxS</FONT>   <= '0';
+<I><FONT COLOR=#808080>--    PenUltCyclexSO PenUltCyclexS xor ReadyxS;</FONT></I>
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= <FONT COLOR=#1E90FF>PenUltCyclexS</FONT>;
+
+    <B>case</B> <FONT COLOR=#804040>StatexDP</FONT> <B>is</B>
+
+      <B>when</B> Idle =>
+        <I><FONT COLOR=#808080>-- we remain idle until someone tells us to start</FONT></I>
+        <FONT COLOR=#1E90FF>FirstBlockxS</FONT> <= '1';
+        <FONT COLOR=#1E90FF>ReadyxS</FONT>      <= '1';
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT>       <= First;
+          <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Idle;
+        <B>end</B> <B>if</B>;
+
+      <B>when</B> First =>
+        <FONT COLOR=#1E90FF>FirstBlockxS</FONT> <= '0';
+        <B>if</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT> = '1' <B>then</B>
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+            <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+              <FONT COLOR=#804040>StatexDN</FONT>       <= First;
+              <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+              <FONT COLOR=#1E90FF>FirstBlockxS</FONT>   <= '1';
+            <B>else</B>
+              <FONT COLOR=#804040>StatexDN</FONT> <= Idle;
+            <B>end</B> <B>if</B>;
+          <B>else</B>
+            <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+              <FONT COLOR=#804040>StatexDN</FONT>       <= Running;
+              <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+            <B>else</B>
+              <FONT COLOR=#804040>StatexDN</FONT> <= Waiting;
+            <B>end</B> <B>if</B>;
+          <B>end</B> <B>if</B>;
+          <FONT COLOR=#1E90FF>ReadyxS</FONT> <= '1';
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= First;
+        <B>end</B> <B>if</B>;
+      <B>when</B> Waiting =>
+        <FONT COLOR=#1E90FF>ReadyxS</FONT> <= '1';
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <FONT COLOR=#804040>StatexDN</FONT>       <= Running;
+          <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Waiting;
+        <B>end</B> <B>if</B>;
+
+      <B>when</B> Running =>
+        <I><FONT COLOR=#808080>-- output is valid when it says so</FONT></I>
+        <B>if</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT> = '1' <B>then</B>
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+            <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+              <FONT COLOR=#804040>StatexDN</FONT>       <= First;
+              <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+              <FONT COLOR=#1E90FF>FirstBlockxS</FONT>   <= '1';
+            <B>else</B>
+              <FONT COLOR=#804040>StatexDN</FONT> <= Idle;
+            <B>end</B> <B>if</B>;
+          <B>else</B>
+            <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+              <FONT COLOR=#804040>StatexDN</FONT>       <= Running;
+              <FONT COLOR=#1E90FF>MessageReadyxS</FONT> <= '1';
+            <B>else</B>
+              <FONT COLOR=#804040>StatexDN</FONT> <= Waiting;
+            <B>end</B> <B>if</B>;
+          <B>end</B> <B>if</B>;
+          <FONT COLOR=#1E90FF>ReadyxS</FONT> <= '1';
+        <B>else</B>
+          <FONT COLOR=#804040>StatexDN</FONT> <= Running;
+        <B>end</B> <B>if</B>;
+
+      <B>when</B> <B>others</B> => null;
+    <B>end</B> <B>case</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_calculate_next_state</FONT>;
+
+  <FONT COLOR=#0000C0>p_calculate_next_inputs</FONT> : <B>process</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>FirstBlockxS</FONT>,
+                                     <FONT COLOR=#804040>HOutxD</FONT>, <FONT COLOR=#804040>HxDP</FONT>, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#1E90FF>VALIDOUTxS</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_calculate_next_inputs</FONT></I>
+<I><FONT COLOR=#808080>--    if (StatexDP = Idle or StatexDP = Waiting) and InWrEnxSI = '1' then</FONT></I>
+    <FONT COLOR=#804040>HxDN</FONT> <= <FONT COLOR=#804040>HxDP</FONT>;
+    <B>if</B> <FONT COLOR=#1E90FF>FirstBlockxS</FONT> = '1' <B>then</B>
+      <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+        <FONT COLOR=#804040>HxDN</FONT> <= SHA_IV;
+      <B>end</B> <B>if</B>;
+    <B>else</B>
+      <B>if</B> <FONT COLOR=#1E90FF>VALIDOUTxS</FONT> = '1' <B>then</B>
+        <FONT COLOR=#804040>HxDN</FONT> <= (<FONT COLOR=#804040>HOutxD</FONT>(0) & <FONT COLOR=#804040>HOutxD</FONT>(1) & <FONT COLOR=#804040>HOutxD</FONT>(2) & <FONT COLOR=#804040>HOutxD</FONT>(3) & <FONT COLOR=#804040>HOutxD</FONT>(4) & <FONT COLOR=#804040>HOutxD</FONT>(5) & <FONT COLOR=#804040>HOutxD</FONT>(6) & <FONT COLOR=#804040>HOutxD</FONT>(7));
+      <B>end</B> <B>if</B>;
+    <B>end</B> <B>if</B>;
+
+
+    <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+      <I><FONT COLOR=#808080>-- we are ready for new stuff, and are adviced to start now</FONT></I>
+<I><FONT COLOR=#808080>--      TextInxDN   TextInxDI;</FONT></I>
+      <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+<I><FONT COLOR=#808080>--      if FirstBlockxS = '1' then</FONT></I>
+<I><FONT COLOR=#808080>--        HInxDN <= SHA_IV;</FONT></I>
+<I><FONT COLOR=#808080>--      else</FONT></I>
+<I><FONT COLOR=#808080>----        HInxDN HOutxDP;</FONT></I>
+<I><FONT COLOR=#808080>--        HInxDN HOutxD(0) & HOutxD(1) & HOutxD(2) & HOutxD(3) & HOutxD(4) & HOutxD(5) & HOutxD(6) & HOutxD(7));</FONT></I>
+<I><FONT COLOR=#808080>--      end if;</FONT></I>
+      
+    <B>else</B>
+      <I><FONT COLOR=#808080>-- not ready, or no new inputs: just leave it as it is</FONT></I>
+<I><FONT COLOR=#808080>--      TextInxDN   TextInxDP;</FONT></I>
+<I><FONT COLOR=#808080>--      HInxDN      HInxDP;</FONT></I>
+      <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_calculate_next_inputs</FONT>;
+
+  <FONT COLOR=#0000C0>p_update_inputs</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_update_inputs</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+<I><FONT COLOR=#808080>--      TextInxDP   others => '0');</FONT></I>
+      <FONT COLOR=#804040>HxDP</FONT>        <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= '0';
+      <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>  <= '0';
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+<I><FONT COLOR=#808080>--      TextInxDP   TextInxDN;</FONT></I>
+      <FONT COLOR=#804040>HxDP</FONT>        <= <FONT COLOR=#804040>HxDN</FONT>;
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSN</FONT>;
+      <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>  <= <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_update_inputs</FONT>;
+
+<I><FONT COLOR=#808080>--  p_calculate_next_outputs : process (HOutxD, HOutxDP, VALIDOUTxS)</FONT></I>
+<I><FONT COLOR=#808080>--  begin  -- process p_calculate_next_outputs</FONT></I>
+<I><FONT COLOR=#808080>----    HOutxDO HOutxDP;</FONT></I>
+<I><FONT COLOR=#808080>----    if VALIDOUTxS = '1' then</FONT></I>
+<I><FONT COLOR=#808080>----      -- if SHA gives a valid output, the output can go to the outside world</FONT></I>
+<I><FONT COLOR=#808080>----      HOutxDN HOutxD(0) & HOutxD(1) & HOutxD(2) & HOutxD(3) & HOutxD(4) & HOutxD(5) & HOutxD(6) & HOutxD(7));</FONT></I>
+<I><FONT COLOR=#808080>----    else</FONT></I>
+<I><FONT COLOR=#808080>----      -- else, keep thelast previous valid value</FONT></I>
+<I><FONT COLOR=#808080>----      HOutxDN HOutxDP;</FONT></I>
+<I><FONT COLOR=#808080>--    end if;</FONT></I>
+<I><FONT COLOR=#808080>--  end process p_calculate_next_outputs;</FONT></I>
+
+<I><FONT COLOR=#808080>--  p_update_outputs : process (CLKxCI, RSTxRBI)</FONT></I>
+<I><FONT COLOR=#808080>--  begin  -- process p_update_outputs</FONT></I>
+<I><FONT COLOR=#808080>--    if RSTxRBI = '0' then               -- asynchronous reset (active low)</FONT></I>
+<I><FONT COLOR=#808080>--      HOutxDP others => '0');</FONT></I>
+<I><FONT COLOR=#808080>--    elsif CLKxCI'event and CLKxCI = '1' then  -- rising clock edge</FONT></I>
+<I><FONT COLOR=#808080>--      HOutxDP HOutxDN;</FONT></I>
+<I><FONT COLOR=#808080>--    end if;</FONT></I>
+<I><FONT COLOR=#808080>--  end process p_update_outputs;</FONT></I>
+
+  <FONT COLOR=#0000C0>p_update_state</FONT> : <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_update_state</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= idle;
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>StatexDP</FONT> <= <FONT COLOR=#804040>StatexDN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_update_state</FONT>;
+
+  <FONT COLOR=#804040>HOutxDO</FONT> <= <FONT COLOR=#804040>HxDP</FONT>;
+
+
+<B>end</B> behavioral;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

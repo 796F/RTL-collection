@@ -1,0 +1,146 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/roundreg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> roundreg <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#32CD32>CLKxCI</FONT>   : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RSTxRBI</FONT>  : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>WEIxSI</FONT>   : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>ICNTxSI</FONT>  : <B>in</B>  unsigned(3 <B>downto</B> 0);
+    <FONT COLOR=#1E90FF>ROUNDxSI</FONT> : <B>in</B>  unsigned(3 <B>downto</B> 0);
+    <FONT COLOR=#804040>VxDI</FONT>     : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>MxDI</FONT>     : <B>in</B>  std_logic_vector(WWIDTH*16-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>VxDO</FONT>     : <B>out</B> std_logic_vector(WWIDTH*16-1 <B>downto</B> 0)
+    );
+
+<B>end</B> roundreg;
+
+<B>architecture</B> hash <B>of</B> roundreg <B>is</B>
+  
+  <B>component</B> gcomp
+    <B>port</B> (
+      <FONT COLOR=#804040>AxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>BxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>CxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>DxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>MxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>KxDI</FONT> : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>AxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>BxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>CxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+      <FONT COLOR=#804040>DxDO</FONT> : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0)
+      );
+  <B>end</B> <B>component</B>;
+
+  <B>type</B> SUBT16 <B>is</B> <B>array</B> (15 <B>downto</B> 0) <B>of</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+
+  <B>signal</B> <FONT COLOR=#804040>VxDN</FONT>, <FONT COLOR=#804040>VxDP</FONT>, <FONT COLOR=#804040>MxD</FONT>                 : SUBT16;
+  
+  <B>signal</B> <FONT COLOR=#804040>G0AxD</FONT>, <FONT COLOR=#804040>G0BxD</FONT>, <FONT COLOR=#804040>G0CxD</FONT>, <FONT COLOR=#804040>G0DxD</FONT>      : std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>G0MxD</FONT>, <FONT COLOR=#804040>G0KxD</FONT>                    : std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>G0AOxD</FONT>, <FONT COLOR=#804040>G0BOxD</FONT>, <FONT COLOR=#804040>G0COxD</FONT>, <FONT COLOR=#804040>G0DOxD</FONT>  : std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- hash</FONT></I>
+
+  <FONT COLOR=#0000C0>p_unform</FONT>: <B>for</B> i <B>in</B> 15 <B>downto</B> 0 <B>generate</B>
+    <FONT COLOR=#804040>MxD</FONT>(15-i) <= <FONT COLOR=#804040>MxDI</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i);
+  <B>end</B> <B>generate</B> <FONT COLOR=#0000C0>p_unform</FONT>;
+
+  <FONT COLOR=#804040>VxDO</FONT> <= <FONT COLOR=#804040>VxDP</FONT>(0)  & <FONT COLOR=#804040>VxDP</FONT>(1)  & <FONT COLOR=#804040>VxDP</FONT>(2)  & <FONT COLOR=#804040>VxDP</FONT>(3)  &
+          <FONT COLOR=#804040>VxDP</FONT>(4)  & <FONT COLOR=#804040>VxDP</FONT>(5)  & <FONT COLOR=#804040>VxDP</FONT>(6)  & <FONT COLOR=#804040>VxDP</FONT>(7)  &
+          <FONT COLOR=#804040>VxDP</FONT>(8)  & <FONT COLOR=#804040>VxDP</FONT>(9)  & <FONT COLOR=#804040>VxDP</FONT>(10) & <FONT COLOR=#804040>VxDP</FONT>(11) &
+          <FONT COLOR=#804040>VxDP</FONT>(12) & <FONT COLOR=#804040>VxDP</FONT>(13) & <FONT COLOR=#804040>VxDP</FONT>(14) & <FONT COLOR=#804040>VxDP</FONT>(15);
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- MEMORY INPUTS</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_inmem</FONT>: <B>process</B> (<FONT COLOR=#804040>G0AOxD</FONT>, <FONT COLOR=#804040>G0BOxD</FONT>, <FONT COLOR=#804040>G0COxD</FONT>, <FONT COLOR=#804040>G0DOxD</FONT>, <FONT COLOR=#804040>VxDI</FONT>, <FONT COLOR=#804040>VxDP</FONT>, <FONT COLOR=#1E90FF>WEIxSI</FONT>, <FONT COLOR=#1E90FF>ICNTxSI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_inmem</FONT></I>
+
+    <FONT COLOR=#804040>VxDN</FONT> <= <FONT COLOR=#804040>VxDP</FONT>;
+
+    <B>if</B> <FONT COLOR=#1E90FF>WEIxSI</FONT> = '1' <B>then</B>
+      <B>for</B> i <B>in</B> 15 <B>downto</B> 0 <B>loop</B>
+        <FONT COLOR=#804040>VxDN</FONT>(15-i) <= <FONT COLOR=#804040>VxDI</FONT>(WWIDTH*(i+1)-1 <B>downto</B> WWIDTH*i);
+        
+      <B>end</B> <B>loop</B>;
+
+    <B>else</B>
+      <FONT COLOR=#804040>VxDN</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>),  0)) <= <FONT COLOR=#804040>G0AOxD</FONT>;
+      <FONT COLOR=#804040>VxDN</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>),  1)) <= <FONT COLOR=#804040>G0BOxD</FONT>;
+      <FONT COLOR=#804040>VxDN</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>),  2)) <= <FONT COLOR=#804040>G0COxD</FONT>;
+      <FONT COLOR=#804040>VxDN</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>),  3)) <= <FONT COLOR=#804040>G0DOxD</FONT>;
+   
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_inmem</FONT>;
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- G INPUTS</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_outmem</FONT>: <B>process</B> (<FONT COLOR=#1E90FF>ICNTxSI</FONT>, <FONT COLOR=#804040>MxD</FONT>, <FONT COLOR=#1E90FF>ROUNDxSI</FONT>, <FONT COLOR=#804040>VxDP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_outmem</FONT></I>
+
+    <FONT COLOR=#804040>G0AxD</FONT> <= <FONT COLOR=#804040>VxDP</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>), 0));
+    <FONT COLOR=#804040>G0BxD</FONT> <= <FONT COLOR=#804040>VxDP</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>), 1));
+    <FONT COLOR=#804040>G0CxD</FONT> <= <FONT COLOR=#804040>VxDP</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>), 2));
+    <FONT COLOR=#804040>G0DxD</FONT> <= <FONT COLOR=#804040>VxDP</FONT>(IMATRIX(to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>), 3));
+    <FONT COLOR=#804040>G0MxD</FONT> <=  <FONT COLOR=#804040>MxD</FONT>(PMATRIX((to_integer(<FONT COLOR=#1E90FF>ROUNDxSI</FONT>))mod 10, to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>)*2)) &
+              <FONT COLOR=#804040>MxD</FONT>(PMATRIX((to_integer(<FONT COLOR=#1E90FF>ROUNDxSI</FONT>))mod 10, to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>)*2+1));
+    <FONT COLOR=#804040>G0KxD</FONT> <=    C(PMATRIX((to_integer(<FONT COLOR=#1E90FF>ROUNDxSI</FONT>))mod 10, to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>)*2+1)) &
+                C(PMATRIX((to_integer(<FONT COLOR=#1E90FF>ROUNDxSI</FONT>))mod 10, to_integer(<FONT COLOR=#1E90FF>ICNTxSI</FONT>)*2));
+
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_outmem</FONT>;  
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- G BLOCK</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  
+  u_gcomp0: gcomp
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT> => <FONT COLOR=#804040>G0AxD</FONT>,
+      <FONT COLOR=#804040>BxDI</FONT> => <FONT COLOR=#804040>G0BxD</FONT>,
+      <FONT COLOR=#804040>CxDI</FONT> => <FONT COLOR=#804040>G0CxD</FONT>,
+      <FONT COLOR=#804040>DxDI</FONT> => <FONT COLOR=#804040>G0DxD</FONT>,
+      <FONT COLOR=#804040>MxDI</FONT> => <FONT COLOR=#804040>G0MxD</FONT>,
+      <FONT COLOR=#804040>KxDI</FONT> => <FONT COLOR=#804040>G0KxD</FONT>,
+      <FONT COLOR=#804040>AxDO</FONT> => <FONT COLOR=#804040>G0AOxD</FONT>,
+      <FONT COLOR=#804040>BxDO</FONT> => <FONT COLOR=#804040>G0BOxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>G0COxD</FONT>,
+      <FONT COLOR=#804040>DxDO</FONT> => <FONT COLOR=#804040>G0DOxD</FONT>
+      );
+
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- V MEMORY</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>p_mem</FONT>: <B>process</B> (<FONT COLOR=#32CD32>CLKxCI</FONT>, <FONT COLOR=#FF6347>RSTxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process p_vmem</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RSTxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>VxDP</FONT> <= (<B>others</B> => (<B>others</B> => '0'));
+      
+    <B>elsif</B> <FONT COLOR=#32CD32>CLKxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>CLKxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>VxDP</FONT> <= <FONT COLOR=#804040>VxDN</FONT>;
+
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>p_mem</FONT>;
+  
+<B>end</B> hash;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

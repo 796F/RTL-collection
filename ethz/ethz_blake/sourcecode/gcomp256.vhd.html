@@ -1,0 +1,72 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/gcomp256.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> gcomp <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>AxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>BxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>CxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>DxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>MxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>KxDI</FONT>    : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>AxDO</FONT>    : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>BxDO</FONT>    : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>CxDO</FONT>    : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>DxDO</FONT>    : <B>out</B> std_logic_vector(WWIDTH-1 <B>downto</B> 0)
+    );
+  
+<B>end</B> gcomp;
+
+<B>architecture</B> hash <B>of</B> gcomp <B>is</B>
+
+  <B>signal</B> T1, T4, T7, T10  : unsigned(WWIDTH-1 <B>downto</B> 0);
+  <B>signal</B> T2, T3, T5, T6   : std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  <B>signal</B> T8, T9, T11, T12 : std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+  <B>signal</B> TK1, TK2         : std_logic_vector(WWIDTH-1 <B>downto</B> 0);
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- hash</FONT></I>
+
+    TK1 <= <FONT COLOR=#804040>MxDI</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH) <B>xor</B> <FONT COLOR=#804040>KxDI</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH);
+    T1  <= unsigned(<FONT COLOR=#804040>AxDI</FONT>) + unsigned(<FONT COLOR=#804040>BxDI</FONT>) + unsigned(TK1);  
+    T2  <= std_logic_vector(T1) <B>xor</B> <FONT COLOR=#804040>DxDI</FONT>;
+    T3  <= T2(15 <B>downto</B> 0) & T2(WWIDTH-1 <B>downto</B> 16);
+        
+    T4  <= unsigned(<FONT COLOR=#804040>CxDI</FONT>) + unsigned(T3);
+    T5  <= std_logic_vector(T4) <B>xor</B> <FONT COLOR=#804040>BxDI</FONT>;
+    T6  <= T5(11 <B>downto</B> 0) & T5(WWIDTH-1 <B>downto</B> 12);
+
+    <I><FONT COLOR=#808080>---------------------------------------------------------------------------</FONT></I>
+
+    TK2 <= <FONT COLOR=#804040>MxDI</FONT>(WWIDTH-1 <B>downto</B> 0) <B>xor</B> <FONT COLOR=#804040>KxDI</FONT>(WWIDTH-1 <B>downto</B> 0);
+    T7  <= T1 + unsigned(T6) + unsigned(TK2);
+    T8  <= std_logic_vector(T7) <B>xor</B> T3;
+    T9  <= T8(7 <B>downto</B> 0) & T8(WWIDTH-1 <B>downto</B> 8);
+        
+    T10 <= T4 + unsigned(T9);
+    T11 <= std_logic_vector(T10) <B>xor</B> T6;
+    T12 <= T11(6 <B>downto</B> 0) & T11(WWIDTH-1 <B>downto</B> 7);
+
+    <FONT COLOR=#804040>AxDO</FONT> <= std_logic_vector(T7);
+    <FONT COLOR=#804040>BxDO</FONT> <= T12;
+    <FONT COLOR=#804040>CxDO</FONT> <= std_logic_vector(T10);
+    <FONT COLOR=#804040>DxDO</FONT> <= T9;
+  
+<B>end</B> hash;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

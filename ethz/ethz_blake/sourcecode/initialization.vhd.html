@@ -1,0 +1,48 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/initialization.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+<B>use</B> work.blakePkg.all;
+
+<B>entity</B> initialization <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>HxDI</FONT>  : <B>in</B>  std_logic_vector(WWIDTH*8-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>SxDI</FONT>  : <B>in</B>  std_logic_vector(WWIDTH*4-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>TxDI</FONT>  : <B>in</B>  std_logic_vector(WWIDTH*2-1 <B>downto</B> 0);
+    <FONT COLOR=#804040>VxDO</FONT>  : <B>out</B> std_logic_vector(WWIDTH*16-1 <B>downto</B> 0)
+    );
+
+<B>end</B> initialization;
+
+<B>architecture</B> hash <B>of</B> initialization <B>is</B>
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- hash</FONT></I>
+
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*16-1 <B>downto</B> WWIDTH*8) <= <FONT COLOR=#804040>HxDI</FONT>;
+
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*8-1 <B>downto</B> WWIDTH*7) <= <FONT COLOR=#804040>SxDI</FONT>(WWIDTH*4-1 <B>downto</B> WWIDTH*3) <B>xor</B> C(0);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*7-1 <B>downto</B> WWIDTH*6) <= <FONT COLOR=#804040>SxDI</FONT>(WWIDTH*3-1 <B>downto</B> WWIDTH*2) <B>xor</B> C(1);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*6-1 <B>downto</B> WWIDTH*5) <= <FONT COLOR=#804040>SxDI</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH)   <B>xor</B> C(2);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*5-1 <B>downto</B> WWIDTH*4) <= <FONT COLOR=#804040>SxDI</FONT>(WWIDTH-1 <B>downto</B> 0)          <B>xor</B> C(3);
+
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*4-1 <B>downto</B> WWIDTH*3) <= <FONT COLOR=#804040>TxDI</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH) <B>xor</B> C(4);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*3-1 <B>downto</B> WWIDTH*2) <= <FONT COLOR=#804040>TxDI</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH) <B>xor</B> C(5);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH*2-1 <B>downto</B> WWIDTH)   <= <FONT COLOR=#804040>TxDI</FONT>(WWIDTH-1 <B>downto</B> 0)        <B>xor</B> C(6);
+  <FONT COLOR=#804040>VxDO</FONT>(WWIDTH-1 <B>downto</B> 0)          <= <FONT COLOR=#804040>TxDI</FONT>(WWIDTH-1 <B>downto</B> 0)        <B>xor</B> C(7);
+  
+<B>end</B> hash;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

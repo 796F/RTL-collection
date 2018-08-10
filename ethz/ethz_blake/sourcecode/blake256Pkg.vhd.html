@@ -1,0 +1,93 @@
+<HTML>
+<TITLE>
+ ethz_blake/sourcecode/blake256Pkg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Blake test bench</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : blake256Pkg.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Beat Muheim  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-15</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-08-16</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Blake 256 package original by Luca Henzen</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-15  1.0      bm	Copy from blake_vhdl_v2/sourcecode/1Gcore</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-16  1.1      bm	add IV</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> std.textio.all;
+<B>use</B> ieee.std_logic_textio.all;
+
+<B>package</B> blakePkg <B>is</B>
+
+  <B>constant</B> WWIDTH : integer := 32;      <I><FONT COLOR=#808080>-- WORD WIDTH</FONT></I>
+  <B>constant</B> NROUND : integer := 14;      <I><FONT COLOR=#808080>-- ROUND NUMBER</FONT></I>
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- c Constants</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <B>type</B> c_const <B>is</B> <B>array</B> (0 <B>to</B> 15) <B>of</B> std_logic_vector(31 <B>downto</B> 0);  
+
+  <B>constant</B> C  : c_const := ((x"243F6A88"), (x"85A308D3"),
+                            (x"13198A2E"), (x"03707344"),
+                            (x"A4093822"), (x"299F31D0"),
+                            (x"082EFA98"), (x"EC4E6C89"),
+                            (x"452821E6"), (x"38D01377"),
+                            (x"BE5466CF"), (x"34E90C6C"),
+                            (x"C0AC29B7"), (x"C97C50DD"),
+                            (x"3F84D5B5"), (x"B5470917"));
+
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- o Permutations</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <B>type</B> perm <B>is</B> <B>array</B> (0 <B>to</B> 9, 0 <B>to</B> 15) <B>of</B> integer;
+  
+  <B>constant</B> PMATRIX : perm := ((0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+                              (14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3),
+                              (11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4),
+                              (7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8),
+                              (9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13),
+                              (2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9),
+                              (12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11),
+                              (13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10),
+                              (6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5),
+                              (10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0));
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- i Iterations</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <B>type</B> iter <B>is</B> <B>array</B> (0 <B>to</B> 7, 0 <B>to</B> 3) <B>of</B> integer;
+  
+  <B>constant</B> IMATRIX : iter := ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15),
+                              (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14));
+
+  
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- IV</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <B>constant</B> IV  : std_logic_vector(WWIDTH*8-1 <B>downto</B> 0)
+                 := (x"6A09E667BB67AE853C6EF372A54FF53A510E527F9B05688C1F83D9AB5BE0CD19");
+
+<B>end</B> blakePkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,31 @@
+<HTML>
+<TITLE>
+ ethz_sha2/synopsys/run_synopsys.csh
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /bin/csh -f</FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>VER</FONT></I>=<I><FONT COLOR=800000>2010.03</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>SCR</FONT></I>=<I><FONT COLOR=800000>"./scripts/sha3_syn.tcl"</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOG</FONT></I>=<I><FONT COLOR=800000>run.log</FONT></I>
+
+synopsys-<I><FONT COLOR=0000FF>${VER}</FONT></I> dc_shell-xg-t -f <I><FONT COLOR=0000FF>$SCR</FONT></I> | tee reports/<I><FONT COLOR=0000FF>$LOG</FONT></I>
+
+<B>echo</B>
+<B>echo</B> "<I><FONT COLOR=#808080># For collecting the slacks of the different runs" </FONT></I>
+<B>echo</B> "grep -e slack -e TIMING reports/*_timing.rep"
+<B>echo</B>
+<B>echo</B> "<I><FONT COLOR=#808080># For collecting the areas of the different runs" </FONT></I>
+<B>echo</B> "grep 'Total cell area' reports/*_area.rpt"
+<B>echo</B> "----------------------------------------------------"
+./eval_syn_results.pl
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

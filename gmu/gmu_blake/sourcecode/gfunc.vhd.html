@@ -1,0 +1,98 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/gfunc.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> ieee.numeric_std.all;		
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_blake_package.all;
+
+<B>entity</B> gfunc_modified <B>is</B>
+	<B>generic</B> ( 	iw : integer := 32; 
+				h : integer := 256; 
+				ADDER_TYPE : integer := SCCA_BASED );
+	<B>port</B>(
+		ain : <B>in</B> std_logic_vector(iw-1 <B>downto</B> 0);
+		bin : <B>in</B>  std_logic_vector(iw-1 <B>downto</B> 0);
+      	cin : <B>in</B>  std_logic_vector(iw-1 <B>downto</B> 0);
+      	din : <B>in</B>  std_logic_vector(iw-1 <B>downto</B> 0);      
+		const_0 : <B>in</B>  std_logic_vector(iw-1 <B>downto</B> 0);	
+		const_1 : <B>in</B>  std_logic_vector(iw-1 <B>downto</B> 0);
+      	aout : <B>out</B> std_logic_vector(iw-1 <B>downto</B> 0);
+      	bout : <B>out</B> std_logic_vector(iw-1 <B>downto</B> 0);
+      	cout : <B>out</B> std_logic_vector(iw-1 <B>downto</B> 0);
+      	dout : <B>out</B> std_logic_vector(iw-1 <B>downto</B> 0)
+		);		 
+<B>end</B> gfunc_modified;
+
+<I><FONT COLOR=#808080>--}} end of automatically maintained section</FONT></I>
+
+<B>architecture</B> struct <B>of</B> gfunc_modified <B>is</B>
+	<B>signal</B> csa_a1_1, csa_a1_2, csa_a2_1, csa_a2_2 : std_logic_vector(iw-1 <B>downto</B> 0);
+
+	<B>signal</B>  D_hold2, D_hold3     :   STD_LOGIC_VECTOR(iw-1 <B>downto</B> 0);
+	<B>signal</B>  hold_D1, hold_B2     :   STD_LOGIC_VECTOR(iw-1 <B>downto</B> 0);
+	<B>signal</B>  hold_B1, hold_D2              :   STD_LOGIC_VECTOR(iw-1 <B>downto</B> 0);
+	<B>signal</B>  D_hold5, D_hold6              :   STD_LOGIC_VECTOR(iw-1 <B>downto</B> 0);
+	<B>signal</B>  hold_A1,  hold_C1             :   std_logic_vector (iw-1 <B>downto</B> 0); 
+	<B>signal</B>  hold_A2, hold_C2	          :   std_logic_vector (iw-1 <B>downto</B> 0);
+<B>begin</B> 
+	
+	D_hold2 <= din <B>xor</B> hold_A1;					 
+	hold_C1 <= hold_D1+ cin;
+	D_hold3 <= hold_C1 <B>xor</B> bin;
+	
+	D_hold5 <= hold_A2 <B>xor</B> hold_D1;
+	hold_C2 <= hold_C1 + hold_D2;
+	D_hold6 <= hold_C2 <B>xor</B> hold_B1;
+	
+	<I><FONT COLOR=#808080>-- output data</FONT></I>
+	aout   <= hold_A2;
+	bout   <= hold_B2;
+	cout   <= hold_C2;
+	dout   <= hold_D2;
+	
+	SCCA_BASED_GEN : <B>if</B> ADDER_TYPE = SCCA_BASED <B>generate</B>
+		hold_A1 <= const_0 + ain + bin;
+		hold_A2 <= const_1 + hold_A1 + hold_B1;
+	<B>end</B> <B>generate</B>;
+	CSA_BASED_GEN : <B>if</B> ADDER_TYPE = CSA_BASED <B>generate</B>
+		csa_a1 : csa <B>generic</B> <B>map</B> ( n => iw ) <B>port</B> <B>map</B> ( a => const_0, b => ain, cin => bin, s => csa_a1_1,cout => csa_a1_2);
+		csa_a2 : csa <B>generic</B> <B>map</B> ( n => iw ) <B>port</B> <B>map</B> ( a => const_1, b => hold_A1, cin => hold_B1, s => csa_a2_1,cout => csa_a2_2);
+		
+		hold_A1 <= csa_a1_1 + (csa_a1_2(iw-2 <B>downto</B> 0) & '0');
+		hold_A2 <= csa_a2_1 + (csa_a2_2(iw-2 <B>downto</B> 0) & '0');
+	<B>end</B> <B>generate</B>;
+	
+	arch_32 : <B>if</B> h <= 256 <B>generate</B>
+		hold_d1 <= rolx(D_hold2, 32-g_rot_arch32(0));
+		hold_B1 <= rolx(D_hold3, 32-g_rot_arch32(1));
+		hold_D2 <= rolx(D_hold5, 32-g_rot_arch32(2));
+		hold_B2 <= rolx(D_hold6, 32-g_rot_arch32(3));
+	<B>end</B> <B>generate</B>;
+	
+	arch_64 : <B>if</B> h > 256 <B>generate</B>
+		hold_d1 <= rolx(D_hold2, 64-g_rot_arch64(0));
+		hold_B1 <= rolx(D_hold3, 64-g_rot_arch64(1));
+		hold_D2 <= rolx(D_hold5, 64-g_rot_arch64(2));
+		hold_B2 <= rolx(D_hold6, 64-g_rot_arch64(3));
+	<B>end</B> <B>generate</B>;	
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

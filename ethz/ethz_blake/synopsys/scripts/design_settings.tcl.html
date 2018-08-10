@@ -1,0 +1,36 @@
+<HTML>
+<TITLE>
+ ethz_blake/synopsys/scripts/design_settings.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080># -- set values for timing constraints</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 3.0 3.8 4.0 4.2 5.0 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 3.0 3.2 3.5 4.0 4.2 4.6 5.0 3.8 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 3.0 3.2 3.5 4.0 4.5 3.8 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 3.65 3.75 }</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>CLOCKLIST</FONT></I> { 4.5 }
+<I><FONT COLOR=#808080>#set CLOCKLIST { 3.0 3.5 3.9 4.2 5.0 5.5 4.5 }</FONT></I>
+<I><FONT COLOR=#808080>#set CLOCKLIST { 4.6 }</FONT></I>
+
+<B><B>set</B> </B><I><FONT COLOR=0000FF>IN</FONT></I>  0.0
+<B><B>set</B> </B><I><FONT COLOR=0000FF>OUT</FONT></I> 0.0
+
+<I><FONT COLOR=#808080># -- assign the target library corner</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>corner</FONT></I>         wc
+
+<I><FONT COLOR=#808080># -- set for driving and lod</FONT></I>
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LIB</FONT></I>       <I><FONT COLOR=0000FF>$driverlibrary</FONT></I>("<I><FONT COLOR=0000FF>$corner</FONT></I>")
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_CELL</FONT></I> BUFM4R
+<B><B>set</B> </B><I><FONT COLOR=0000FF>DRIV_PIN</FONT></I>  Z
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_CELL</FONT></I> BUFM4R
+<B><B>set</B> </B><I><FONT COLOR=0000FF>LOAD_PIN</FONT></I>  A
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

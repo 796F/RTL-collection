@@ -1,0 +1,39 @@
+<HTML>
+<TITLE>
+ ethz_groestl/synopsys/scripts/wireload.tcl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<I><FONT COLOR=#808080>## set the wireload model from encounter</FONT></I>
+<I><FONT COLOR=#808080>## this could be much better</FONT></I>
+
+<I><FONT COLOR=#808080>## read in the wireload library</FONT></I>
+<B><FONT COLOR=008000>read_lib</FONT></B> ../../shabziger/synopsys/encounter_wireload.lib
+set_wire_load_mode enclosed 
+
+<B><FONT COLOR=008000>current_design</FONT></B> ethz_groestl
+<B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> ethz_groestl.top.i_ethz_groestl_flat
+
+<B><FONT COLOR=008000>current_design</FONT></B> groestl_p
+<B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> groestl_p_test_1.top.i_ethz_groestl.i_p_flat
+
+<B><FONT COLOR=008000>current_design</FONT></B> groestl_q
+<B><FONT COLOR=008000>set_wire_load_model</FONT></B> <I><FONT COLOR=AA0000>-library</FONT></I> shabziger_chip_flat <I><FONT COLOR=AA0000>-name</FONT></I> groestl_q_test_3.top.i_ethz_groestl.i_q_flat
+
+
+<I><FONT COLOR=#808080># Would not work, as the instances are not unique at this moment</FONT></I>
+<I><FONT COLOR=#808080>#foreach NUM {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {</FONT></I>
+<I><FONT COLOR=#808080>#  current_design groestl_subbytes_${NUM}</FONT></I>
+<I><FONT COLOR=#808080>#  ## this is an SBOX the wireload should be the same </FONT></I>
+<I><FONT COLOR=#808080>#  set_wire_load_model -library shabziger_chip_flat -name groestl_subbytes_15.top.i_ethz_groestl.i_p.i_subbytes_0_flat</FONT></I>
+<I><FONT COLOR=#808080>#}</FONT></I>
+
+<B><FONT COLOR=008000>current_design</FONT></B> ethz_groestl
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,63 @@
+<HTML>
+<TITLE>
+ gmu_jh/sourcecode/gmu_jh_top.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_jh_package.all;
+
+<B>entity</B> gmu_jh_top <B>is</B>
+        <B>port</B> (
+                <FONT COLOR=#32CD32>ClkxCI</FONT>      : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Rising Edge Triggered Clock</FONT></I>
+                <FONT COLOR=#FF6347>RstxRBI</FONT>     : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Active-low, asynchronous Reset Signal</FONT></I>
+                <FONT COLOR=#CCA800>ScanInxTI</FONT>   : <B>in</B>  std_logic;
+                <FONT COLOR=#CCA800>ScanOutxTO</FONT>  : <B>out</B> std_logic;
+                <FONT COLOR=#CCA800>ScanEnxTI</FONT>   : <B>in</B>  std_logic;
+                <FONT COLOR=#1E90FF>InEnxSI</FONT>     : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Input Enable</FONT></I>
+                <FONT COLOR=#1E90FF>FinBlockxSI</FONT> : <B>in</B>  std_logic;  <I><FONT COLOR=#808080>-- Final Block</FONT></I>
+                <FONT COLOR=#804040>DataxDI</FONT>     : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- Input Data                  </FONT></I>
+
+                <FONT COLOR=#1E90FF>OutEnxSO</FONT>       : <B>out</B> std_logic;  <I><FONT COLOR=#808080>-- Output Enable</FONT></I>
+                <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;  <I><FONT COLOR=#808080>-- Penultimate Cycle</FONT></I>
+                <FONT COLOR=#804040>DataxDO</FONT>        : <B>out</B> std_logic_vector(255 <B>downto</B> 0)  <I><FONT COLOR=#808080>-- Output Data</FONT></I>
+        );	   
+<B>end</B> gmu_jh_top;
+
+
+<B>architecture</B> structure <B>of</B> gmu_jh_top <B>is</B> 	
+	<B>signal</B> er, sf : std_logic;
+	<B>signal</B> srdp : std_logic;
+	<B>signal</B> erf : std_logic;							
+<B>begin</B>					
+	control_gen : <B>entity</B> work.gmu_jh_control(beh)
+		<B>port</B> <B>map</B> (
+			clk => <FONT COLOR=#32CD32>ClkxCI</FONT>, rst => <FONT COLOR=#FF6347>RstxRBI</FONT>, 
+			<FONT COLOR=#1E90FF>InEnxSI</FONT> => <FONT COLOR=#1E90FF>InEnxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT> => <FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>OutEnxSO</FONT> => <FONT COLOR=#1E90FF>OutEnxSO</FONT>, <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> => <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT>,  			
+			er => er, sf => sf, srdp => srdp, erf => erf
+		);			
+	
+	datapath_gen : <B>entity</B> work.gmu_jh_datapath_otf(struct) 
+		<B>port</B> <B>map</B> (
+			clk => <FONT COLOR=#32CD32>ClkxCI</FONT>, rst => <FONT COLOR=#FF6347>RstxRBI</FONT>, din => <FONT COLOR=#804040>DataxDI</FONT>, dout => <FONT COLOR=#804040>DataxDO</FONT>,
+			er => er, sf => sf, srdp => srdp, erf => erf
+		);		  	
+<B>end</B> structure;
+	
+	
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

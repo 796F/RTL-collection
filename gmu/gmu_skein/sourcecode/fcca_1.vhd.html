@@ -1,0 +1,54 @@
+<HTML>
+<TITLE>
+ gmu_skein/sourcecode/fcca_1.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- ======================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;
+
+
+<B>entity</B> fcca <B>is</B> 
+	<B>generic</B> (		
+		n : integer := 64);
+	<B>port</B>(
+		a : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		b : <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+		s : <B>out</B> std_logic_vector(n-1 <B>downto</B> 0)
+	);		
+<B>end</B> fcca;
+
+<B>architecture</B> struct <B>of</B> fcca <B>is</B> 
+1 <B>downto</B> 1); <I><FONT COLOR=#808080>-- group propagate</FONT></I>
+1 <B>downto</B> 1); <I><FONT COLOR=#808080>-- group generate</FONT></I>
+	<B>signal</B> c : std_logic_vector(N/4 <B>downto</B> 1);
+<B>begin</B>
+												 
+	<I><FONT COLOR=#808080>-- Note : for cin = 0, c(1) = gg(0) = a(1)b(1) ^ [{a(1) xor b(1)} {a(0)b(0)}]</FONT></I>
+	c(1) <= (a(1) <B>and</B> b(1)) <B>or</B> ((a(1) <B>xor</B> b(1)) <B>and</B> (a(0) <B>and</B> b(0)));
+	<FONT COLOR=#0000C0>gen</FONT> : <B>for</B> i <B>in</B> 1 <B>to</B> N/4-1 <B>generate</B>
+		gg(i) <= (a(i*2+1) <B>and</B> b(i*2+1)) <B>or</B> ((a(i*2+1) <B>xor</B> b(i*2+1)) <B>and</B> (a(i*2) <B>and</B> b(i*2)));
+		gp(i) <= ((a(i*2+1) <B>xor</B> b(i*2+1)) <B>and</B> (a(i*2) <B>xor</B> b(i*2)));			
+		c(i+1) <= gg(i) <B>or</B> (gp(i) <B>and</B> c(i));				
+	<B>end</B> <B>generate</B>;
+	
+	s(N/2-1 <B>downto</B> 0) <= a(N/2-1 <B>downto</B> 0) + b(N/2-1 <B>downto</B> 0);
+	s(N-1 <B>downto</B> N/2) <= a(N-1 <B>downto</B> N/2) + b(N-1 <B>downto</B> N/2) + c(N/4);
+
+<B>end</B> struct;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

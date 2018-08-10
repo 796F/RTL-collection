@@ -1,0 +1,93 @@
+<HTML>
+<TITLE>
+ gmu_sha2/sourcecode/sha2_round_rs.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-11 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha2_pkg.all;
+
+<B>entity</B> sha2_round_rs <B>is</B>
+<B>generic</B>( n : integer :=HASH_SIZE_256/SHA2_WORDS_NUM);
+<B>port</B>(	 
+	sel_gh		:<B>in</B> std_logic;	 
+	kw		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	kwire		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+   	wwire		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);	
+	ain		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	bin		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	cin		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	din		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	ein		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	fin		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	gin		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+	hin		:<B>in</B> std_logic_vector(n-1 <B>downto</B> 0);	  
+	kwhwire		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	aout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	bout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	cout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	dout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	eout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	fout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	gout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0);
+	hout		:<B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> sha2_round_rs;
+
+<B>architecture</B> basic <B>of</B> sha2_round_rs	<B>is</B>	
+	<B>signal</B>	cf0_reg	: std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B>	cf1_reg	: std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B>	ch_reg		: std_logic_vector(n-1 <B>downto</B> 0);
+	<B>signal</B>	maj_reg		: std_logic_vector(n-1 <B>downto</B> 0);	
+	<B>signal</B> g_or_h				:std_logic_vector(n-1 <B>downto</B> 0);	
+
+
+<B>begin</B> 	   	
+
+a32: <B>if</B> n=HASH_SIZE_256/STATE_REG_NUM <B>generate</B>	
+s0		: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func) 	<B>generic</B> <B>map</B> (n=>n, func=>"cf", a=>ARCH32_CF0_1, b=>ARCH32_CF0_2, c=>ARCH32_CF0_3) <B>port</B> <B>map</B> (x=>ain, o=>CF0_reg);	
+s1		: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func) 	<B>generic</B> <B>map</B> (n=>n, func=>"cf", a=>ARCH32_CF1_1, b=>ARCH32_CF1_2, c=>ARCH32_CF1_3) <B>port</B> <B>map</B> (x=>ein, o=>CF1_reg);	 
+<B>end</B> <B>generate</B>;
+
+a64: <B>if</B> n=HASH_SIZE_512/STATE_REG_NUM <B>generate</B>	
+s0		: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func) 	<B>generic</B> <B>map</B> (n=>n, func=>"cf", a=>ARCH64_CF0_1, b=>ARCH64_CF0_2, c=>ARCH64_CF0_3) <B>port</B> <B>map</B> (x=>ain, o=>CF0_reg);	
+s1		: <B>entity</B> work.sha2_sigma_func(sha2_sigma_func) 	<B>generic</B> <B>map</B> (n=>n, func=>"cf", a=>ARCH64_CF1_1, b=>ARCH64_CF1_2, c=>ARCH64_CF1_3) <B>port</B> <B>map</B> (x=>ein, o=>CF1_reg);	 
+<B>end</B> <B>generate</B>;
+
+
+	c1		: <B>entity</B> work.sha2_ch_func(sha2_ch_func)		<B>generic</B> <B>map</B> (n=>n) <B>port</B> <B>map</B> (x=>ein, y=>fin, z=>gin, o=>ch_reg);	
+	m1		: <B>entity</B> work.sha2_maj_func(sha2_maj_func)	<B>generic</B> <B>map</B> (n=>n) <B>port</B> <B>map</B> (x=>ain, y=>bin, z=>cin, o=>maj_reg);
+		
+	eout <= ch_reg + cf1_reg + kw + din;
+
+	aout <= kw + maj_reg + cf0_reg + ch_reg +cf1_reg; 	
+	
+	g_or_h <= hin <B>when</B> sel_gh='1' <B>else</B> gin;
+
+	kwhwire <= g_or_h + kwire + wwire;
+	 
+		bout <= ain;
+		cout <= bin;
+		dout <= cin;
+		fout <= ein;
+		gout <= fin;
+		hout <= gin;
+		
+<B>end</B> basic;	
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

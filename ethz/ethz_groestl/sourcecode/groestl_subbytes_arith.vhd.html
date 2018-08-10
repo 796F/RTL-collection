@@ -1,0 +1,145 @@
+<HTML>
+<TITLE>
+ ethz_groestl/sourcecode/groestl_subbytes_arith.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Sub Bytes using GF2 decomposition</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : groestl_subbytes.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Frank K. Guerkaynak  </FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-21</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-02</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: Taken from SHA3r2 Groestl as it is</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-21  1.0      kgf	Created</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.numeric_std.all;
+
+<B>entity</B> groestl_subbytes <B>is</B>
+  <B>port</B> (
+    <FONT COLOR=#804040>DxDI</FONT>    : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+    <FONT COLOR=#804040>DxDO</FONT>    : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+<B>end</B> groestl_subbytes;
+
+<B>architecture</B> rtl <B>of</B> groestl_subbytes <B>is</B>
+
+  <B>component</B> gf4map_2
+    <B>port</B> (
+      <FONT COLOR=#804040>AxDI</FONT>  : <B>in</B>  std_logic_vector(7 <B>downto</B> 0);
+      <FONT COLOR=#804040>AhxDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>AlxDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> gf4sqr_2
+    <B>port</B> (
+      <FONT COLOR=#804040>AxDI</FONT>  : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>A2xDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> gf4inv_2
+    <B>port</B> (
+      <FONT COLOR=#804040>AxDI</FONT>    : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>AInvxDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>component</B> gf4mult_2
+    <B>port</B> (
+      <FONT COLOR=#804040>AxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>BxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>CxDO</FONT> : <B>out</B> std_logic_vector(3 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+  
+  <B>component</B> gf4imapaffine_2
+    <B>port</B> (
+      <FONT COLOR=#804040>AhxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>AlxDI</FONT> : <B>in</B>  std_logic_vector(3 <B>downto</B> 0);
+      <FONT COLOR=#804040>AxDO</FONT>  : <B>out</B> std_logic_vector(7 <B>downto</B> 0));
+  <B>end</B> <B>component</B>;
+
+  <B>signal</B> <FONT COLOR=#804040>AhxD</FONT>, <FONT COLOR=#804040>AlxD</FONT>                   : std_logic_vector(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>Ah2xD</FONT>, <FONT COLOR=#804040>Al2xD</FONT>                 : std_logic_vector(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>AmxD</FONT>, <FONT COLOR=#804040>ApxD</FONT>                   : std_logic_vector(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>AexD</FONT>, <FONT COLOR=#804040>Ael2pxD</FONT>, <FONT COLOR=#804040>AppxD</FONT>, <FONT COLOR=#804040>AinvxD</FONT> : std_logic_vector(3 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>AhsxD</FONT>, <FONT COLOR=#804040>AlsxD</FONT>                 : std_logic_vector(3 <B>downto</B> 0);
+
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  u_gf4map2: gf4map_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT>  => <FONT COLOR=#804040>DxDI</FONT>,
+      <FONT COLOR=#804040>AhxDO</FONT> => <FONT COLOR=#804040>AhxD</FONT>,
+      <FONT COLOR=#804040>AlxDO</FONT> => <FONT COLOR=#804040>AlxD</FONT>);
+
+  u_gf4sqr_h2: gf4sqr_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT>  => <FONT COLOR=#804040>AhxD</FONT>,
+      <FONT COLOR=#804040>A2xDO</FONT> => <FONT COLOR=#804040>Ah2xD</FONT>);
+
+  u_gf4sqr_l2: gf4sqr_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT>  => <FONT COLOR=#804040>AlxD</FONT>,
+      <FONT COLOR=#804040>A2xDO</FONT> => <FONT COLOR=#804040>Al2xD</FONT>);
+
+  u_gf4mult_e2: gf4mult_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT> => <FONT COLOR=#804040>Ah2xD</FONT>,
+      <FONT COLOR=#804040>BxDI</FONT> => "1110",
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>AexD</FONT>);
+
+  u_gf4mult2: gf4mult_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT> => <FONT COLOR=#804040>AlxD</FONT>,
+      <FONT COLOR=#804040>BxDI</FONT> => <FONT COLOR=#804040>AhxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>AmxD</FONT>);
+
+  <FONT COLOR=#804040>ApxD</FONT>    <= <FONT COLOR=#804040>AlxD</FONT> <B>xor</B> <FONT COLOR=#804040>AhxD</FONT>;
+  <FONT COLOR=#804040>Ael2pxD</FONT> <= <FONT COLOR=#804040>AexD</FONT> <B>xor</B> <FONT COLOR=#804040>Al2xD</FONT>;
+  <FONT COLOR=#804040>AppxD</FONT>   <= <FONT COLOR=#804040>Ael2pxD</FONT> <B>xor</B> <FONT COLOR=#804040>AmxD</FONT>;
+
+  u_gf4inv2: gf4inv_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT>    => <FONT COLOR=#804040>AppxD</FONT>,
+      <FONT COLOR=#804040>AInvxDO</FONT> => <FONT COLOR=#804040>AinvxD</FONT>);
+  
+  u_gf4mult_h2: gf4mult_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT> => <FONT COLOR=#804040>AhxD</FONT>,
+      <FONT COLOR=#804040>BxDI</FONT> => <FONT COLOR=#804040>AinvxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>AhsxD</FONT>);
+
+  u_gf4mult_l2: gf4mult_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AxDI</FONT> => <FONT COLOR=#804040>AinvxD</FONT>,
+      <FONT COLOR=#804040>BxDI</FONT> => <FONT COLOR=#804040>ApxD</FONT>,
+      <FONT COLOR=#804040>CxDO</FONT> => <FONT COLOR=#804040>AlsxD</FONT>);
+
+  u_gf4imapaffine2: gf4imapaffine_2
+    <B>port</B> <B>map</B> (
+      <FONT COLOR=#804040>AhxDI</FONT> => <FONT COLOR=#804040>AhsxD</FONT>,
+      <FONT COLOR=#804040>AlxDI</FONT> => <FONT COLOR=#804040>AlsxD</FONT>,
+      <FONT COLOR=#804040>AxDO</FONT>  => <FONT COLOR=#804040>DxDO</FONT>);
+  
+  
+<B>end</B> rtl;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

@@ -1,0 +1,102 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/gmu_groestl_datapath.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+ <I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.numeric_std.all; 
+<B>use</B> ieee.std_logic_unsigned.all;
+<B>use</B> work.sha3_pkg.all;	 
+<B>use</B> work.groestl_pkg.all;
+
+<I><FONT COLOR=#808080>-- Groestl datapath for quasi-pipelined architecture</FONT></I>
+<I><FONT COLOR=#808080>-- rom_style = {DISTRIBUTED, COMBINATIONAL}	</FONT></I>
+<I><FONT COLOR=#808080>--- all combinations are allowed 	 </FONT></I>
+
+<B>entity</B> gmu_groestl_datapath <B>is</B>
+<B>generic</B> (n	:integer := GROESTL_DATA_SIZE_SMALL; hs : integer := HASH_SIZE_256; rom_style : integer := DISTRIBUTED);
+<B>port</B>( 	 
+	clk					: <B>in</B> std_logic; 
+	rst					: <B>in</B> std_logic; 
+	
+	<I><FONT COLOR=#808080>-- processing</FONT></I>
+	init1				: <B>in</B> std_logic;	
+	init2				: <B>in</B> std_logic;	
+	init3				: <B>in</B> std_logic;	
+	last_cycle			: <B>in</B> std_logic;					
+	finalization		: <B>in</B> std_logic;	
+	wr_state			: <B>in</B> std_logic;
+	wr_result			: <B>in</B> std_logic;
+	load_ctr			: <B>in</B> std_logic;										   
+	wr_ctr				: <B>in</B> std_logic;
+	p_mode				: <B>in</B> std_logic;
+	
+	din 				: <B>in</B> std_logic_vector(511 <B>downto</B> 0);
+    dout 				: <B>out</B> std_logic_vector(255 <B>downto</B> 0));
+<B>end</B> gmu_groestl_datapath;
+  
+<B>architecture</B> folded_x2 <B>of</B> gmu_groestl_datapath <B>is</B>	  
+	<B>constant</B> log2mw : integer := log2( n );
+	<B>constant</B> log2mwzeroes : std_logic_vector(log2mw-1 <B>downto</B> 0) := (<B>others</B> => '0');
+	<B>constant</B> zero : std_logic_vector(n-1 <B>downto</B> 0):= (<B>others</B>=>'0');  
+	<B>signal</B> from_final, to_round, from_register, to_final : std_logic_vector(n-1 <B>downto</B> 0); 
+	<B>signal</B> init_value,  to_register, to_reg, inter_value : std_logic_vector(n-1 <B>downto</B> 0); 
+	<B>signal</B> ctr : std_logic_vector(3 <B>downto</B> 0);  
+	<B>signal</B> round : std_logic_vector(7 <B>downto</B> 0);
+<I><FONT COLOR=#808080>--	signal to_round1, to_round2, m1, m2 : std_logic_vector(n/2-1 downto 0);</FONT></I>
+<B>begin</B>	
+<I><FONT COLOR=#808080>--	to_round1 downto n/2);</FONT></I>
+<I><FONT COLOR=#808080>--	to_round2 downto 0);	</FONT></I>
+<I><FONT COLOR=#808080>--	m1 downto n/2);</FONT></I>
+<I><FONT COLOR=#808080>--	m2 downto 0);	</FONT></I>
+		
+	init_value <= din <B>when</B> init1='1' <B>else</B> din <B>xor</B> from_final;
+	inter_value <= init_value <B>when</B> init2='1' <B>else</B> from_register;
+	to_round <= (from_register <B>xor</B> from_final) <B>when</B> finalization='1' <B>else</B> inter_value;
+	to_reg <= to_final <B>when</B> last_cycle='1' <B>else</B> to_register;	
+		
+	<I><FONT COLOR=#808080>-- storage register for intermediate values 	</FONT></I>
+	state_reg : regna 
+		<B>generic</B> <B>map</B>(N=>n, init=>zero(n-1 <B>downto</B> 0)) 
+		<B>port</B> <B>map</B> (clk => clk, rst => rst, en => wr_state, input => to_reg, output => from_register );	   
+	
+	<I><FONT COLOR=#808080>-- round counter </FONT></I>
+	rd_num : counterna
+		<B>generic</B> <B>map</B> (N =>4) 
+		<B>port</B> <B>map</B> (clk=>clk, rst=>rst, load=>load_ctr, en=>wr_ctr,  output=>ctr); 
+	
+	round <= zero(3 <B>downto</B> 0) & ctr;	
+	
+	<I><FONT COLOR=#808080>-- quasi-pipelining round 	</FONT></I>
+	rounds : <B>entity</B> work.groestl_pq(round3_pipelined) 
+		<B>generic</B> <B>map</B> (n=>n, rom_style=>rom_style)
+		<B>port</B> <B>map</B> (clk=>clk, rst=>rst, p_mode=>p_mode, round=>round, input=>to_round, output=>to_register);
+	
+	<I><FONT COLOR=#808080>-- initialization vectors for different versions of Groestl</FONT></I>
+	to_final <= GROESTL_INIT_VALUE_256 <B>when</B> init3='1' <B>else</B> to_register <B>xor</B> from_final;  	
+			
+	<I><FONT COLOR=#808080>-- final message digest storage register  		</FONT></I>
+	final_reg : regna 
+		<B>generic</B> <B>map</B>(N=>n, init=>zero(n-1 <B>downto</B> 0)) 
+		<B>port</B> <B>map</B> (clk => clk, rst => rst, en => wr_result, input => to_final, output => from_final );	
+	
+	<I><FONT COLOR=#808080>-- parallel input serial output	</FONT></I>
+	dout <= from_final(hs-1 <B>downto</B> 0);
+<B>end</B> folded_x2; 
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

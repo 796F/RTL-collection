@@ -1,0 +1,250 @@
+<HTML>
+<TITLE>
+ ethz_sha2/synopsys/eval_syn_results.pl
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>#! /usr/bin/perl -w</FONT></I>
+
+<I><FONT COLOR=#808080>############################################################
+## Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+##            http://www.iis.ee.ethz.ch/~sha3
+############################################################</FONT></I>
+<B>use</B> <B>strict</B>;
+
+<I><FONT COLOR=#808080># v0.5 - kgf@ee.ethz.ch - Mon Sep 19 12:52:33 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - blake has saved another cycle + added a small note to</FONT></I>
+<I><FONT COLOR=#808080>#    the HTML file about the most recent run.. </FONT></I>
+<I><FONT COLOR=#808080># v0.4 - kgf@ee.ethz.ch - Fri Sep 16 12:50:35 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - changed the latency for blake</FONT></I>
+<I><FONT COLOR=#808080># v0.3 - kgf@ee.ethz.ch - Fri Sep  9 18:27:28 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - added a sort to the ls, so that we have numerical sort.. </FONT></I>
+<I><FONT COLOR=#808080>#    well sort of.. </FONT></I>
+<I><FONT COLOR=#808080># v0.2 - kgf@ee.ethz.ch - Tue Sep  6 07:46:30 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - improvements </FONT></I>
+<I><FONT COLOR=#808080># v0.1 - kgf@ee.ethz.ch - Mon Sep  5 08:42:52 CEST 2011</FONT></I>
+<I><FONT COLOR=#808080>#  - read all the reports and print some summaries</FONT></I>
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$GATE</FONT></I>=1.44;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$SCALE</FONT></I>=1.05;   <I><FONT COLOR=#808080># scaling for the GNUPLOTS</FONT></I>
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$cond</FONT></I> = "wc";
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>@TIMINGS</FONT></I>=`ls reports/*_${cond}_timing.rep|sort -n -t_ -k3 `;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%TIME</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%AREA</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%THROUGHPUT</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$DEBUG</FONT></I>= ($<I><FONT COLOR=#808080>#ARGV > -1)? 1 : 0;</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%LATENCY</FONT></I> = (
+                  "ethz_sha2"    =>  67, 
+                  "ethz_blake"   =>  57,
+                  "ethz_groestl" =>  81, 
+                  "ethz_jh"      =>  42, 
+                  "ethz_keccak"  =>  24, 
+                  "ethz_skein"   =>  92, 
+                  "gmu_sha2"     =>  65, 
+                  "gmu_blake"    =>  29, 
+                  "gmu_groestl"  =>  21,
+                  "gmu_jh"       =>  43,
+                  "gmu_keccak"   =>  24,
+                  "gmu_skein"    =>  19
+              );
+<I><FONT COLOR=#808080># where to generate the files</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$GNUPLOT</FONT></I>="./reports/gnuplot";
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$PNG</FONT></I>="../../results/atplot";
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$HTML</FONT></I>="../../results/";
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%CONDITIONS</FONT></I> = (
+                     "wc" => "Worst case - 1.08V 125C",
+                     "bc" => "Best case - 1.32V 0C",
+                     "tc" => "Typical case - 1.20V 25C"
+                 );
+
+<B>unless</B> (<I><FONT COLOR=0000FF>$ENV</FONT></I>{PWD}=~/(ethz|gmu)_(blake|skein|sha2|jh|keccak|groestl)\/synopsys$/){
+   <B><FONT COLOR=AA0000>die</FONT></B> "Current directory is [<I><FONT COLOR=0000FF>$ENV</FONT></I>{PWD}] not in synopsys\n";
+}
+
+<I><FONT COLOR=#808080>## get the last constraint that has been used</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$current_cons</FONT></I>=0;
+<B><FONT COLOR=AA0000>open</FONT></B> (S, "< scripts/design_settings.tcl") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> scripts/design_settings.tcl\n";
+<B>while</B>(S){
+<B>next</B> <B>unless</B> (/^\s*set CLOCKLIST\s*\{([^}]+)\}/);
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>@cons</FONT></I>=<B><FONT COLOR=AA0000>split</FONT></B>(' ',<I><FONT COLOR=0000FF>$1</FONT></I>);
+ <I><FONT COLOR=0000FF>$current_cons</FONT></I> = "<I><FONT COLOR=0000FF>$cons</FONT></I>[$<I><FONT COLOR=#808080>#cons]\n";</FONT></I>
+}
+<B><FONT COLOR=AA0000>close</FONT></B>(S);
+
+
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$flavor</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>;
+<B><FONT COLOR=AA0000>my</FONT></B>  <I><FONT COLOR=0000FF>$alg</FONT></I> = <I><FONT COLOR=0000FF>$2</FONT></I>;
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$date</FONT></I>=`date`;
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$date</FONT></I>);
+
+<I><FONT COLOR=#808080>## create the html file</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$htmlfile</FONT></I>=<I><FONT COLOR=0000FF>$HTML</FONT></I>."${flavor}_${alg}_results.html";
+<B><FONT COLOR=AA0000>open</FONT></B> (H, "> <I><FONT COLOR=0000FF>$htmlfile</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> HTML file <I><FONT COLOR=0000FF>$htmlfile</FONT></I>\n";
+<B><FONT COLOR=AA0000>print</FONT></B> H <<"BUGU";
+HTML
+TITLESynthesis results <B>for</B> <I><FONT COLOR=0000FF>$alg</FONT></I> (<I><FONT COLOR=0000FF>$flavor</FONT></I> version)/TITLE
+BODY
+CENTER
+H3
+Synthesis results <B>for</B>
+/H3
+H1
+<I><FONT COLOR=0000FF>$flavor</FONT></I> <I><FONT COLOR=0000FF>$alg</FONT></I>
+/H1
+ILast run <B>for</B> <I><FONT COLOR=0000FF>$current_cons</FONT></I> ns clock constraint/IBR
+IMG SRC="atplot_${flavor}_${alg}.png"
+/CENTER
+HR
+BUGU
+
+<B>foreach</B> <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$tim</FONT></I> (<I><FONT COLOR=0000FF>@TIMINGS</FONT></I>){
+ <B><FONT COLOR=AA0000>chomp</FONT></B> (<I><FONT COLOR=0000FF>$tim</FONT></I>);
+ <I><FONT COLOR=0000FF>$tim</FONT></I>=~/${flavor}_${alg}_(\d+(?:\.\d+)?)_(wc|tc|bc)_timing/;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$target</FONT></I>= <I><FONT COLOR=0000FF>$1</FONT></I>;
+ <I><FONT COLOR=0000FF>$cond</FONT></I> = <I><FONT COLOR=0000FF>$2</FONT></I>;
+
+ <B><FONT COLOR=AA0000>print</FONT></B> H "H3Clock Constraint <I><FONT COLOR=0000FF>$target</FONT></I> ns/H3\nBArea:/B\nUL\n";
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$area</FONT></I>=0;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$ffs</FONT></I>=0;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$afile</FONT></I>="./reports/${flavor}_${alg}_${target}_${cond}_area.rpt";
+ <B><FONT COLOR=AA0000>open</FONT></B> (A, "<<I><FONT COLOR=0000FF>$afile</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> <I><FONT COLOR=0000FF>$afile</FONT></I> <B>for</B> reading\n";
+   <B>while</B> (A){
+     <B>next</B> <B>unless</B> (/(Noncombinational|Total cell) area/);
+     <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>@sp</FONT></I> = <B><FONT COLOR=AA0000>split</FONT></B>;
+     <B>if</B> (/^Total/){
+       <I><FONT COLOR=0000FF>$area</FONT></I> = <I><FONT COLOR=0000FF>$sp</FONT></I>[3];
+     } 
+     <B>else</B>         {
+       <I><FONT COLOR=0000FF>$ffs</FONT></I>  = <I><FONT COLOR=0000FF>$sp</FONT></I>[2];
+     }
+     <B><FONT COLOR=AA0000>print</FONT></B> <B>if</B> <I><FONT COLOR=0000FF>$DEBUG</FONT></I>;
+   }
+   <B><FONT COLOR=AA0000>printf</FONT></B>(H " LI Total area : <I><FONT COLOR=0000FF>%6</FONT></I>.3f kGate equivalents\n", <I><FONT COLOR=0000FF>$area</FONT></I>/ (1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>));
+   <B><FONT COLOR=AA0000>printf</FONT></B>(H " LI Total FF area : <I><FONT COLOR=0000FF>%6</FONT></I>.3f  kGate equivalents (<I><FONT COLOR=0000FF>%4</FONT></I>.1f%%)\n", <I><FONT COLOR=0000FF>$ffs</FONT></I>/ (1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>), 100*(<I><FONT COLOR=0000FF>$ffs</FONT></I>/<I><FONT COLOR=0000FF>$area</FONT></I>));
+
+   <I><FONT COLOR=0000FF>$AREA</FONT></I>{<I><FONT COLOR=0000FF>$target</FONT></I>}=<I><FONT COLOR=0000FF>$area</FONT></I>;
+ <B><FONT COLOR=AA0000>close</FONT></B> (A);
+
+ <B><FONT COLOR=AA0000>print</FONT></B> H "/UL\nBTiming:/B (I<I><FONT COLOR=0000FF>$CONDITIONS</FONT></I>{<I><FONT COLOR=0000FF>$cond</FONT></I>}/I)\nUL\n";
+ 
+ <B><FONT COLOR=AA0000>open</FONT></B> (T, "<<I><FONT COLOR=0000FF>$tim</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "Can not <B><FONT COLOR=AA0000>open</FONT></B> <I><FONT COLOR=0000FF>$tim</FONT></I> <B>for</B> reading\n";
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>%R</FONT></I>;
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$type</FONT></I> ="none";
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$maxtime</FONT></I> = 0;
+   <B>while</B> (T){
+       <B>next</B> <B>unless</B> (/(TIMING|slack)/);
+       <B>if</B> (/^(IN2REG|IN2OUT|REG2REG|REG2OUT)/){
+         <I><FONT COLOR=0000FF>$type</FONT></I> = <I><FONT COLOR=0000FF>$1</FONT></I>;
+         <B><FONT COLOR=AA0000>printf</FONT></B>(H "LI <I><FONT COLOR=0000FF>%s</FONT></I> timing : ",lc(<I><FONT COLOR=0000FF>$type</FONT></I>));
+       }
+       <B>else</B>{
+         <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>@sp</FONT></I>=<B><FONT COLOR=AA0000>split</FONT></B>;
+         <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$time</FONT></I>= <I><FONT COLOR=0000FF>$target</FONT></I> - (<I><FONT COLOR=0000FF>$sp</FONT></I>[2]);
+
+         <B><FONT COLOR=AA0000>printf</FONT></B>(H "<I><FONT COLOR=0000FF>%6</FONT></I>.4f ns\n",<I><FONT COLOR=0000FF>$time</FONT></I>);
+
+         <I><FONT COLOR=0000FF>$maxtime</FONT></I>=<I><FONT COLOR=0000FF>$time</FONT></I> <B>if</B> (<I><FONT COLOR=0000FF>$maxtime</FONT></I> lt <I><FONT COLOR=0000FF>$time</FONT></I>);
+         <I><FONT COLOR=0000FF>$R</FONT></I>{<I><FONT COLOR=0000FF>$type</FONT></I>} = <I><FONT COLOR=0000FF>$time</FONT></I>; 
+       }
+   }
+   <B><FONT COLOR=AA0000>printf</FONT></B>("<I><FONT COLOR=0000FF>%s</FONT></I>(<I><FONT COLOR=0000FF>%s</FONT></I>) - <I><FONT COLOR=0000FF>%s</FONT></I> - crit.path <I><FONT COLOR=0000FF>%6</FONT></I>.3f ns - area <I><FONT COLOR=0000FF>%6</FONT></I>.3f kGE ( <I><FONT COLOR=0000FF>%4</FONT></I>.1f%% FFs)\n",
+           <I><FONT COLOR=0000FF>$alg</FONT></I>,<I><FONT COLOR=0000FF>$flavor</FONT></I>, <I><FONT COLOR=0000FF>$target</FONT></I>, <I><FONT COLOR=0000FF>$maxtime</FONT></I>, <I><FONT COLOR=0000FF>$area</FONT></I>/(1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>), 100* (<I><FONT COLOR=0000FF>$ffs</FONT></I>/<I><FONT COLOR=0000FF>$area</FONT></I>));
+   <B>foreach</B> <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$r</FONT></I> (keys <I><FONT COLOR=0000FF>%R</FONT></I>){
+     <B><FONT COLOR=AA0000>print</FONT></B> " <I><FONT COLOR=0000FF>$r</FONT></I> timing (<I><FONT COLOR=0000FF>$R</FONT></I>{<I><FONT COLOR=0000FF>$r</FONT></I>}) ns \n" <B>if</B> <I><FONT COLOR=0000FF>$DEBUG</FONT></I>;
+   }
+<I><FONT COLOR=#808080>#   print "max timing = $maxtime\n";</FONT></I>
+   <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$target</FONT></I>} = <I><FONT COLOR=0000FF>$maxtime</FONT></I>;
+   <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$bpc</FONT></I> = (<I><FONT COLOR=0000FF>$alg</FONT></I> eq "keccak") ? 1088 : 512 ; <I><FONT COLOR=#808080># bits per block</FONT></I>
+   <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$throughput</FONT></I> = <I><FONT COLOR=0000FF>$bpc</FONT></I> / (<I><FONT COLOR=0000FF>$maxtime</FONT></I> * <I><FONT COLOR=0000FF>$LATENCY</FONT></I>{"${flavor}_${alg}"});
+   <I><FONT COLOR=0000FF>$THROUGHPUT</FONT></I>{<I><FONT COLOR=0000FF>$target</FONT></I>} = <I><FONT COLOR=0000FF>$throughput</FONT></I>;
+
+   <B><FONT COLOR=AA0000>printf</FONT></B>(H "/UL\nBThroughput : <I><FONT COLOR=0000FF>%6</FONT></I>.3f Gbps/B (I<I><FONT COLOR=0000FF>%d</FONT></I> bits per <I><FONT COLOR=0000FF>%d</FONT></I> cycles a <I><FONT COLOR=0000FF>%6</FONT></I>.3f ns/I)BR\n", 
+             <I><FONT COLOR=0000FF>$throughput</FONT></I>, <I><FONT COLOR=0000FF>$bpc</FONT></I>, <I><FONT COLOR=0000FF>$LATENCY</FONT></I>{"${flavor}_${alg}"}, <I><FONT COLOR=0000FF>$maxtime</FONT></I>);
+
+   <B><FONT COLOR=AA0000>printf</FONT></B>(H "/UL\nThroughput per area: <I><FONT COLOR=0000FF>%6</FONT></I>.3f kbits/s/gate equivalentBRHR\n", 
+             (1000*<I><FONT COLOR=0000FF>$throughput</FONT></I>)/ (<I><FONT COLOR=0000FF>$area</FONT></I>/(1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>)));
+   
+   <B><FONT COLOR=AA0000>print</FONT></B> '-' x 75, "\n" <B>if</B> <I><FONT COLOR=0000FF>$DEBUG</FONT></I>;
+ <B><FONT COLOR=AA0000>close</FONT></B>(T);
+}
+<B><FONT COLOR=AA0000>chomp</FONT></B>(<I><FONT COLOR=0000FF>$current_cons</FONT></I>);
+<B><FONT COLOR=AA0000>print</FONT></B> "Last synthesis run <B>for</B> <I><FONT COLOR=0000FF>$current_cons</FONT></I> ns\n";
+
+<I><FONT COLOR=#808080># now let us generate a GNUPLOT picture</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$g1</FONT></I>= <I><FONT COLOR=0000FF>$GNUPLOT</FONT></I>."_${flavor}_${alg}_at.dat";
+<B><FONT COLOR=AA0000>open</FONT></B> (G, "> <I><FONT COLOR=0000FF>$g1</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "can not <B><FONT COLOR=AA0000>open</FONT></B> <I><FONT COLOR=0000FF>$g1</FONT></I>\n";
+
+<I><FONT COLOR=#808080># defaults so that the min max comparison works </FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$mina</FONT></I>=99999.0;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$mint</FONT></I>=99.0;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$maxa</FONT></I>=0.0;
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$maxt</FONT></I>=0.0;
+
+<B>foreach</B> <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$t</FONT></I> (sort {<I><FONT COLOR=0000FF>$a</FONT></I> =<I><FONT COLOR=0000FF>$b</FONT></I>} keys <I><FONT COLOR=0000FF>%TIME</FONT></I>){
+ <B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$gates</FONT></I>= <I><FONT COLOR=0000FF>$AREA</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>}/(1000*<I><FONT COLOR=0000FF>$GATE</FONT></I>); <I><FONT COLOR=#808080># calculate in gates </FONT></I>
+ <B><FONT COLOR=AA0000>printf</FONT></B>(G "<I><FONT COLOR=0000FF>%f</FONT></I> <I><FONT COLOR=0000FF>%6</FONT></I>.3f <I><FONT COLOR=0000FF>%6</FONT></I>.3f\n",<I><FONT COLOR=0000FF>$gates</FONT></I>, <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>}, <I><FONT COLOR=0000FF>$THROUGHPUT</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>});
+ <I><FONT COLOR=0000FF>$mina</FONT></I> = <I><FONT COLOR=0000FF>$gates</FONT></I>    <B>if</B> (<I><FONT COLOR=0000FF>$mina</FONT></I> > <I><FONT COLOR=0000FF>$gates</FONT></I>);
+ <I><FONT COLOR=0000FF>$maxa</FONT></I> = <I><FONT COLOR=0000FF>$gates</FONT></I>    <B>if</B> (<I><FONT COLOR=0000FF>$maxa</FONT></I> < <I><FONT COLOR=0000FF>$gates</FONT></I>);
+ <I><FONT COLOR=0000FF>$mint</FONT></I> = <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>} <B>if</B> (<I><FONT COLOR=0000FF>$mint</FONT></I> > <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>});
+ <I><FONT COLOR=0000FF>$maxt</FONT></I> = <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>} <B>if</B> (<I><FONT COLOR=0000FF>$maxt</FONT></I> < <I><FONT COLOR=0000FF>$TIME</FONT></I>{<I><FONT COLOR=0000FF>$t</FONT></I>});
+<I><FONT COLOR=#808080># print "$AREA{$t} $gates : $mina - $maxa , $TIME{$t} : $mint - $maxt\n" ;</FONT></I>
+}
+<B><FONT COLOR=AA0000>close</FONT></B> (G);
+
+<I><FONT COLOR=0000FF>$mina</FONT></I> = <B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$mina</FONT></I> / <I><FONT COLOR=0000FF>$SCALE</FONT></I>);
+<I><FONT COLOR=0000FF>$maxa</FONT></I> = <B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$maxa</FONT></I> * <I><FONT COLOR=0000FF>$SCALE</FONT></I>);
+<I><FONT COLOR=0000FF>$mint</FONT></I> = <B><FONT COLOR=AA0000>int</FONT></B>(<I><FONT COLOR=0000FF>$mint</FONT></I>);
+<I><FONT COLOR=0000FF>$maxt</FONT></I> = <B><FONT COLOR=AA0000>int</FONT></B>((<I><FONT COLOR=0000FF>$maxt</FONT></I>+1) );
+
+
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$g2</FONT></I> = <I><FONT COLOR=0000FF>$GNUPLOT</FONT></I>."_${flavor}_${alg}_at.gnuplot";
+<B><FONT COLOR=AA0000>open</FONT></B> (G, "> <I><FONT COLOR=0000FF>$g2</FONT></I>") <B>or</B> <B><FONT COLOR=AA0000>die</FONT></B> "can not <B><FONT COLOR=AA0000>open</FONT></B> <I><FONT COLOR=0000FF>$g2</FONT></I>\n";
+<B><FONT COLOR=AA0000>print</FONT></B> G<<"BUGU";
+set title "<I><FONT COLOR=0000FF>$alg</FONT></I> (<I><FONT COLOR=0000FF>$flavor</FONT></I>) - <I><FONT COLOR=0000FF>$CONDITIONS</FONT></I>{<I><FONT COLOR=0000FF>$cond</FONT></I>} Synthesis Results - UMC65LL"
+set ylabel "Area [kGate eq]"
+set xlabel "Critical Path [ns]"
+set grid
+set terminal png
+set out "${PNG}_${flavor}_${alg}.png"
+plot [<I><FONT COLOR=0000FF>$mint</FONT></I>:<I><FONT COLOR=0000FF>$maxt</FONT></I>][<I><FONT COLOR=0000FF>$mina</FONT></I>:<I><FONT COLOR=0000FF>$maxa</FONT></I>] "${GNUPLOT}_${flavor}_${alg}_at.dat" using 2:1 with steps notitle lt 0 lw 2, "${GNUPLOT}_${flavor}_${alg}_at.dat" using 2:1 with points notitle lt 1 pointtype 3 pointsize 2
+set terminal post eps color
+set out "${PNG}_${flavor}_${alg}.eps"
+replot
+BUGU
+<B><FONT COLOR=AA0000>close</FONT></B>(G);
+
+<I><FONT COLOR=#808080># execute gnuplot</FONT></I>
+<B><FONT COLOR=AA0000>my</FONT></B> <I><FONT COLOR=0000FF>$result</FONT></I>=`gnuplot <I><FONT COLOR=0000FF>$g2</FONT></I>`;
+<I><FONT COLOR=#808080>#unlink ($g1,$g2);</FONT></I>
+<B><FONT COLOR=AA0000>print</FONT></B> H<<"BUGU";
+FONT SIZE=-2
+CENTER
+Shabziger ResultsBR
+BGMU:/B
+[A HREF="gmu_sha2_results.html"SHA2/A]
+[A HREF="gmu_blake_results.html"Blake/A]
+[A HREF="gmu_groestl_results.html"Groestl/A]
+[A HREF="gmu_jh_results.html"JH/A]
+[A HREF="gmu_keccak_results.html"Keccak/A]
+[A HREF="gmu_skein_results.html"Skein/A]BR
+BETHZ:/B
+[A HREF="ethz_sha2_results.html"SHA2/A]
+[A HREF="ethz_blake_results.html"Blake/A]
+[A HREF="ethz_groestl_results.html"Groestl/A]
+[A HREF="ethz_jh_results.html"JH/A]
+[A HREF="ethz_keccak_results.html"Keccak/A]
+[A HREF="ethz_skein_results.html"Skein/A]BR
+/CENTER
+BR
+Generated automatically on <I><FONT COLOR=0000FF>$date</FONT></I> by eval_syn_results.pl/FONT
+/HTML
+BUGU
+<B><FONT COLOR=AA0000>close</FONT></B>(H);
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

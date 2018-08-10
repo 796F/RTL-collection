@@ -1,0 +1,76 @@
+<HTML>
+<TITLE>
+ gmu_keccak/sourcecode/keccak_pkg.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+
+
+<B>package</B> keccak_pkg <B>is</B>
+	 <I><FONT COLOR=#808080>-- Keccak parameters </FONT></I>
+	<B>constant</B> KECCAK_STATE 			: integer := 1600;	
+	<B>constant</B> KECCAK256_CAPACITY 	: integer := 1088;
+	<B>constant</B> KECCAK512_CAPACITY 	: integer := 576;
+	
+	<I><FONT COLOR=#808080>-- width of the interface ports</FONT></I>
+	<B>constant</B> w						: integer := 64;   
+	<B>constant</B> LOG2_W 				: integer := 6;
+	<B>constant</B> log2roundnr_final256 	: integer := 6; 
+	<B>constant</B> KECCAK256_WORDS 		: integer:=  KECCAK256_CAPACITY/w;
+	<B>constant</B> KECCAK512_WORDS 		: integer:=  KECCAK512_CAPACITY/w;
+	 
+			 
+	<I><FONT COLOR=#808080>-- number of rounds of Keccak 		 </FONT></I>
+	<B>constant</B> roundnr256	 			: integer := 24;
+	<B>constant</B> roundnr_final 			: integer := 1;	 
+	
+	<B>constant</B> CTR_SHORT				: integer := 16;
+	<B>constant</B> CTR_FULL				: integer := 64;
+	<B>constant</B> CTR_SIZE				: integer := CTR_FULL;
+	
+	<I><FONT COLOR=#808080>-- Keccak data types </FONT></I>
+	<B>type</B> plane  <B>is</B> <B>array</B> (4 <B>downto</B> 0) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+	<B>type</B> state 	<B>is</B> <B>array</B> (4 <B>downto</B> 0) <B>of</B> plane;	  
+	<B>type</B> state_table <B>is</B> <B>array</B> ( 0 <B>to</B> 4 ) <B>of</B> std_logic_vector(KECCAK_STATE/5-1 <B>downto</B> 0);
+	
+	<I><FONT COLOR=#808080>-- function descriptions</FONT></I>
+	<B>function</B> get_keccak_capacity ( hs : integer ) <B>return</B> integer;	  
+	<B>function</B> str2table ( str : std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0) ) <B>return</B> state_table;
+<B>end</B> keccak_pkg;
+
+<B>package</B> body keccak_pkg <B>is</B>			
+	<B>function</B> get_keccak_capacity ( hs : integer ) <B>return</B> integer <B>is</B>
+	<B>begin</B>
+		<B>if</B> hs = 256 <B>then</B>
+			<B>return</B> KECCAK256_CAPACITY;
+		<B>elsif</B> hs = 512 <B>then</B>
+			<B>return</B> KECCAK512_CAPACITY;
+		<B>end</B> <B>if</B>;
+	<B>end</B> <B>function</B> <FONT COLOR=#0000C0>get_keccak_capacity</FONT>;	 
+	
+	
+	<B>function</B> str2table ( str : std_logic_vector(KECCAK_STATE-1 <B>downto</B> 0) ) <B>return</B> state_table <B>is</B>
+		<B>variable</B> ret : state_table;
+	<B>begin</B>			 
+		<B>for</B> i <B>in</B> 0 <B>to</B> 4 <B>loop</B>
+			ret(i) := str(KECCAK_STATE*(5-i)/5-1 <B>downto</B> KECCAK_STATE*(4-i)/5);
+		<B>end</B> <B>loop</B>;		
+		<B>return</B> ret;
+	<B>end</B> <B>function</B> <FONT COLOR=#0000C0>str2table</FONT>;	
+<B>end</B> <B>package</B> body keccak_pkg;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

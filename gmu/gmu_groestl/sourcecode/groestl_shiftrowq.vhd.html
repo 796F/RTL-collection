@@ -1,0 +1,88 @@
+<HTML>
+<TITLE>
+ gmu_groestl/sourcecode/groestl_shiftrowq.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+ <I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;   
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> work.sha3_pkg.all;	 
+<B>use</B> work.groestl_pkg.all;	
+
+<I><FONT COLOR=#808080>-- Groestl ShiftRow  implemented as combinational function</FONT></I>
+<I><FONT COLOR=#808080>-- possible generics values: hs = {GROESTL_DATA_SIZE_SMALL, GROESTL_DATA_SIZE_BIG} </FONT></I>
+<I><FONT COLOR=#808080>-- they are corresponding to 256 and 512 versions respectively</FONT></I>
+
+<I><FONT COLOR=#808080>-- 2011-09-28 - kgf - separated architectures</FONT></I>
+
+<B>entity</B> groestl_shiftrowq <B>is</B>
+<B>generic</B> (n	:integer := GROESTL_DATA_SIZE_SMALL);
+<B>port</B>( 
+	input 		: <B>in</B> std_logic_vector(n-1 <B>downto</B> 0);
+        output 		: <B>out</B> std_logic_vector(n-1 <B>downto</B> 0));
+<B>end</B> groestl_shiftrowq;
+  
+<B>architecture</B> rtl <B>of</B> groestl_shiftrowq <B>is</B>
+<B>type</B> matrix <B>is</B> <B>array</B> (0 <B>to</B> n/8-1) <B>of</B> std_logic_vector(7 <B>downto</B> 0);
+<B>signal</B> gsq	: matrix;
+<B>begin</B>	
+
+	<FONT COLOR=#0000C0>conv</FONT> : <B>for</B> i <B>in</B> 0 <B>to</B> n/8-1 <B>generate</B>	
+		gsq(n/8-i-1) <= input(8*(i+1)-1 <B>downto</B> 8*i);
+	<B>end</B> <B>generate</B>;
+	
+gen256: <B>if</B> n=GROESTL_DATA_SIZE_SMALL <B>generate</B>
+	
+	output <=	gsq(8) & gsq(25) & gsq(42) & gsq(59) & gsq(4) & gsq(21) & gsq(38) & gsq(55) & 
+				gsq(16) & gsq(33) & gsq(50) & gsq(3) & gsq(12) & gsq(29) & gsq(46) & gsq(63) & 				
+				gsq(24) & gsq(41) & gsq(58) & gsq(11) & gsq(20) & gsq(37) & gsq(54) & gsq(7) & 				
+				gsq(32) & gsq(49) & gsq(2) & gsq(19) & gsq(28) & gsq(45) & gsq(62) & gsq(15) & 				
+				gsq(40) & gsq(57) & gsq(10) & gsq(27) & gsq(36) & gsq(53) & gsq(6) & gsq(23) & 				
+				gsq(48) & gsq(1) & gsq(18) & gsq(35) & gsq(44) & gsq(61) & gsq(14) & gsq(31) & 				
+				gsq(56) & gsq(9) & gsq(26) & gsq(43) & gsq(52) & gsq(5) & gsq(22) & gsq(39) & 				
+				gsq(0) & gsq(17) & gsq(34) & gsq(51) & gsq(60) & gsq(13) & gsq(30) & gsq(47); 				
+
+				<I><FONT COLOR=#808080>--				gsq() & gsq() & gsq() & gsq() & gsq() & gsq() & gsq() & gsq() & 				</FONT></I>
+
+				<B>end</B> <B>generate</B>;
+
+
+gen512: <B>if</B> n=GROESTL_DATA_SIZE_BIG <B>generate</B>
+
+output <= 	gsq(8) & gsq(25) & gsq(42) & gsq(91) & gsq(4) & gsq(21) & gsq(38) & gsq(55) & 
+			gsq(16) & gsq(33) & gsq(50) & gsq(99) & gsq(12) & gsq(29) & gsq(46) & gsq(63) &				
+			gsq(24) & gsq(41) & gsq(58) & gsq(107) & gsq(20) & gsq(37) & gsq(54) & gsq(71) & 
+			gsq(32) & gsq(49) & gsq(66) & gsq(115) & gsq(28) & gsq(45) & gsq(62) & gsq(79) &			
+			gsq(40) & gsq(57) & gsq(74) & gsq(123) & gsq(36) & gsq(53) & gsq(70) & gsq(87) & 
+			gsq(48) & gsq(65) & gsq(82) & gsq(3) & gsq(44) & gsq(61) & gsq(78) & gsq(95) &			
+			gsq(56) & gsq(73) & gsq(90) & gsq(11) & gsq(52) & gsq(69) & gsq(86) & gsq(103) & 
+			gsq(64) & gsq(81) & gsq(98) & gsq(19) & gsq(60) & gsq(77) & gsq(94) & gsq(111) &			
+			gsq(72) & gsq(89) & gsq(106) & gsq(27) & gsq(68) & gsq(85) & gsq(102) & gsq(119) & 
+			gsq(80) & gsq(97) & gsq(114) & gsq(35) & gsq(76) & gsq(93) & gsq(110) & gsq(127) &			
+			gsq(88) & gsq(105) & gsq(122) & gsq(43) & gsq(84) & gsq(101) & gsq(118) & gsq(7) & 
+			gsq(96) & gsq(113) & gsq(2) & gsq(51) & gsq(92) & gsq(109) & gsq(126) & gsq(15) &			
+			gsq(104) & gsq(121) & gsq(10) & gsq(59) & gsq(100) & gsq(117) & gsq(6) & gsq(23) & 
+			gsq(112) & gsq(1) & gsq(18) & gsq(67) & gsq(108) & gsq(125) & gsq(14) & gsq(31) &			
+			gsq(120) & gsq(9) & gsq(26) & gsq(75) & gsq(116) & gsq(5) & gsq(22) & gsq(39) & 
+			gsq(0) & gsq(17) & gsq(34) & gsq(83) & gsq(124) & gsq(13) & gsq(30) & gsq(47);		
+			
+<B>end</B> <B>generate</B>;
+
+
+<B>end</B> <B>architecture</B> <FONT COLOR=#0000C0>rtl</FONT>; 
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

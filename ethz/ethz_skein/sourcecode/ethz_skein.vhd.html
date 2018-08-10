@@ -1,0 +1,457 @@
+<HTML>
+<TITLE>
+ ethz_skein/sourcecode/ethz_skein.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 Integrated Sytems Laboratory, ETH Zurich
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Title      : Skein for ETHZ</FONT></I>
+<I><FONT COLOR=#808080>-- Project    : Shabziger</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- File       : ethz_skein.vhd</FONT></I>
+<I><FONT COLOR=#808080>-- Author     : Chrikell</FONT></I>
+<I><FONT COLOR=#808080>-- Company    : Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-- Created    : 2011-08-25</FONT></I>
+<I><FONT COLOR=#808080>-- Last update: 2011-09-01</FONT></I>
+<I><FONT COLOR=#808080>-- Platform   : ModelSim (simulation), Synopsys (synthesis)</FONT></I>
+<I><FONT COLOR=#808080>-- Standard   : VHDL'87</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Description: </FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright (c) 2011 Integrated Systems Laboratory, ETH Zurich</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Revisions  :</FONT></I>
+<I><FONT COLOR=#808080>-- Date        Version  Author  Description</FONT></I>
+<I><FONT COLOR=#808080>-- 2011-08-25  1.0      Chrikell</FONT></I>
+<I><FONT COLOR=#808080>-------------------------------------------------------------------------------</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.numeric_std.all;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> work.skeinpkg.all;
+
+<B>entity</B> ethz_skein <B>is</B>
+
+  <B>port</B> (
+    <FONT COLOR=#32CD32>ClkxCI</FONT>         : <B>in</B>  std_logic;
+    <FONT COLOR=#FF6347>RstxRBI</FONT>        : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>FinBlockxSI</FONT>    : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>InWrEnxSI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     : <B>out</B> std_logic;
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic;
+    <FONT COLOR=#804040>BlockxDI</FONT>       : <B>in</B>  std_logic_vector(511 <B>downto</B> 0);
+    <FONT COLOR=#804040>MsgLenxDI</FONT>      : <B>in</B>  std_logic_vector(63 <B>downto</B> 0);  <I><FONT COLOR=#808080>-- size of current Block, in Bytes. Only used if FinBlockxSI = '1'</FONT></I>
+    <FONT COLOR=#804040>HashxDO</FONT>        : <B>out</B> std_logic_vector(255 <B>downto</B> 0);
+    <FONT COLOR=#CCA800>ScanInxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanEnxTI</FONT>      : <B>in</B>  std_logic;
+    <FONT COLOR=#CCA800>ScanOutxTO</FONT>     : <B>out</B> std_logic
+    );
+
+<B>end</B> ethz_skein;
+
+<B>architecture</B> rtl <B>of</B> ethz_skein <B>is</B>
+
+
+  <B>type</B> Tweak <B>is</B> <B>array</B> (0 <B>to</B> 2) <B>of</B> std_logic_vector(63 <B>downto</B> 0);
+  <B>type</B> FSMState <B>is</B> (idle, first, run, final);
+
+  <B>signal</B> <FONT COLOR=#804040>StatexDP</FONT>, <FONT COLOR=#804040>StatexDN</FONT>, <FONT COLOR=#804040>StateTmpxD</FONT> : HashState;
+  <B>signal</B> <FONT COLOR=#804040>TmpStatexDP</FONT>, <FONT COLOR=#804040>TmpStatexDN</FONT>       : HashUnsigned;
+  <B>signal</B> <FONT COLOR=#804040>MsgBlkxDN</FONT>, <FONT COLOR=#804040>MsgBlkxDP</FONT>           : HashState;
+  <B>signal</B> <FONT COLOR=#804040>KeyxDP</FONT>, <FONT COLOR=#804040>KeyxDN</FONT>                 : Key;
+  <B>signal</B> <FONT COLOR=#804040>TweakxDN</FONT>, <FONT COLOR=#804040>TweakxDP</FONT>             : Tweak;
+  <B>signal</B> <FONT COLOR=#804040>ByteCntxDN</FONT>, <FONT COLOR=#804040>ByteCntxDP</FONT>         : unsigned(63 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>, <FONT COLOR=#1E90FF>RoundxSN</FONT>, RoundxSPP  : unsigned(6 <B>downto</B> 0);
+  <B>signal</B> <FONT COLOR=#804040>FSMStatexDP</FONT>, <FONT COLOR=#804040>FSMStatexDN</FONT>       : FSMState;
+  <B>signal</B> <FONT COLOR=#1E90FF>WaitxSN</FONT>, <FONT COLOR=#1E90FF>WaitxSP</FONT>               : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>, <FONT COLOR=#1E90FF>KeyUpdxSP</FONT>           : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FinBlockxSN</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>       : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>KeyAddxSN</FONT>, <FONT COLOR=#1E90FF>KeyAddxSP</FONT>           : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>         : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FrstBlkxS</FONT>                      : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>, <FONT COLOR=#1E90FF>FrstBlkxSN</FONT>         : std_logic;
+  <B>signal</B> <FONT COLOR=#1E90FF>FinalizexS</FONT>                     : std_logic;
+  <B>signal</B> Debug                          : integer;
+  
+  
+  
+<B>begin</B>  <I><FONT COLOR=#808080>-- rtl</FONT></I>
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- FSM</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>FSM</FONT> : <B>process</B> (<FONT COLOR=#804040>BlockxDI</FONT>, <FONT COLOR=#804040>ByteCntxDP</FONT>, <FONT COLOR=#804040>FSMStatexDP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSI</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>,
+                 <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>, <FONT COLOR=#1E90FF>InWrEnxSI</FONT>, <FONT COLOR=#1E90FF>KeyAddxSP</FONT>, <FONT COLOR=#1E90FF>KeyUpdxSP</FONT>, <FONT COLOR=#804040>MsgBlkxDP</FONT>,
+                 <FONT COLOR=#804040>MsgLenxDI</FONT>, <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>, <FONT COLOR=#1E90FF>RoundxSP</FONT>, <FONT COLOR=#1E90FF>WaitxSP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process FSM</FONT></I>
+
+    <FONT COLOR=#804040>FSMStatexDN</FONT>    <= <FONT COLOR=#804040>FSMStatexDP</FONT>;
+    <FONT COLOR=#804040>MsgBlkxDN</FONT>      <= <FONT COLOR=#804040>MsgBlkxDP</FONT>;
+    <FONT COLOR=#1E90FF>RoundxSN</FONT>       <= <FONT COLOR=#1E90FF>RoundxSP</FONT>;
+    <FONT COLOR=#1E90FF>FrstBlkxS</FONT>      <= '0';
+    <FONT COLOR=#1E90FF>FinBlockxSN</FONT>    <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT>;
+    <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>      <= '0';
+    <FONT COLOR=#1E90FF>WaitxSN</FONT>        <= '0';
+    <FONT COLOR=#1E90FF>KeyAddxSN</FONT>      <= '0';
+    <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '0';
+    <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>     <= '0';
+    <FONT COLOR=#1E90FF>OutWrEnxSO</FONT>     <= <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>;
+    <FONT COLOR=#1E90FF>FinalizexS</FONT>     <= '0';
+    <FONT COLOR=#804040>ByteCntxDN</FONT>     <= <FONT COLOR=#804040>ByteCntxDP</FONT>;
+    <FONT COLOR=#1E90FF>FrstBlkxSN</FONT>     <= '0';
+
+
+
+    <B>case</B> <FONT COLOR=#804040>FSMStatexDP</FONT> <B>is</B>
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <I><FONT COLOR=#808080>-- idle</FONT></I>
+      <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+      <B>when</B> idle =>
+        <FONT COLOR=#1E90FF>WaitxSN</FONT> <= '1';
+        <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+          <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+            <B>for</B> j <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+              <FONT COLOR=#804040>MsgBlkxDN</FONT>(7-j)((8*(i+1)-1) <B>downto</B> (8*i)) <= <FONT COLOR=#804040>BlockxDI</FONT>((j*64)+(8*(8-i)-1) <B>downto</B> (j*64)+(8*(7-i)));
+            <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>--i</FONT></I>
+          <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+          <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+          <FONT COLOR=#804040>FSMStatexDN</FONT> <= first;
+          <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+          <FONT COLOR=#1E90FF>KeyAddxSN</FONT>   <= '1';
+          <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '0';
+          <FONT COLOR=#804040>ByteCntxDN</FONT>  <= unsigned(<FONT COLOR=#804040>MsgLenxDI</FONT>);
+
+        <B>end</B> <B>if</B>;
+        <FONT COLOR=#1E90FF>RoundxSN</FONT> <= (<B>others</B> => '0');
+
+
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+        <I><FONT COLOR=#808080>-- first</FONT></I>
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------  </FONT></I>
+      <B>when</B> first =>
+        <FONT COLOR=#1E90FF>FrstBlkxS</FONT> <= '1';
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "10" <B>then</B>
+          <FONT COLOR=#1E90FF>KeyUpdxSN</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>KeyAddxSP</FONT> = '0' <B>then</B>
+          <FONT COLOR=#1E90FF>RoundxSN</FONT> <= <FONT COLOR=#1E90FF>RoundxSP</FONT> +1;
+          <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "11" <B>then</B>
+            <FONT COLOR=#1E90FF>KeyAddxSN</FONT> <= '1';
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 71 <B>and</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '0' <B>then</B>
+          <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 72 <B>then</B>
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= final;
+            <FONT COLOR=#1E90FF>RoundxSN</FONT>    <= (<B>others</B> => '0');
+            <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '1';
+            <FONT COLOR=#804040>MsgBlkxDN</FONT>   <= (<B>others</B> => (<B>others</B> => '0'));
+            <FONT COLOR=#1E90FF>FrstBlkxSN</FONT>  <= '1';
+          <B>elsif</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= run;
+            <FONT COLOR=#1E90FF>RoundxSN</FONT>    <= (<B>others</B> => '0');
+            <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '1';
+            <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+            <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+              <B>for</B> j <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+                <FONT COLOR=#804040>MsgBlkxDN</FONT>(7-j)((8*(i+1)-1) <B>downto</B> (8*i)) <= <FONT COLOR=#804040>BlockxDI</FONT>((j*64)+(8*(8-i)-1) <B>downto</B> (j*64)+(8*(7-i)));
+              <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>--i</FONT></I>
+            <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+            <FONT COLOR=#804040>ByteCntxDN</FONT> <= unsigned(<FONT COLOR=#804040>MsgLenxDI</FONT>);
+          <B>else</B>
+            <FONT COLOR=#1E90FF>RoundxSN</FONT> <= <FONT COLOR=#1E90FF>RoundxSP</FONT>;
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>  <= '1';
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+        <I><FONT COLOR=#808080>-- run</FONT></I>
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------  </FONT></I>
+      <B>when</B> run =>
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 0 <B>and</B> <FONT COLOR=#1E90FF>KeyUpdxSP</FONT> = '1' <B>then</B>
+          <FONT COLOR=#1E90FF>KeyAddxSN</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "10" <B>then</B>
+          <FONT COLOR=#1E90FF>KeyUpdxSN</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>KeyAddxSP</FONT> = '0' <B>and</B> <FONT COLOR=#1E90FF>WaitxSP</FONT> = '0' <B>then</B>
+          <FONT COLOR=#1E90FF>RoundxSN</FONT> <= <FONT COLOR=#1E90FF>RoundxSP</FONT> +1;
+          <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "11" <B>then</B>
+            <FONT COLOR=#1E90FF>KeyAddxSN</FONT> <= '1';
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 71 <B>and</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '0' <B>then</B>
+          <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 72 <B>then</B>
+          <B>if</B> <FONT COLOR=#1E90FF>FinBlockxSP</FONT> = '1' <B>then</B>
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= final;
+            <FONT COLOR=#1E90FF>RoundxSN</FONT>    <= (<B>others</B> => '0');
+            <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '1';
+            <FONT COLOR=#804040>MsgBlkxDN</FONT>   <= (<B>others</B> => (<B>others</B> => '0'));
+            <FONT COLOR=#1E90FF>FrstBlkxSN</FONT>  <= '1';
+          <B>elsif</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= run;
+            <FONT COLOR=#1E90FF>RoundxSN</FONT>    <= (<B>others</B> => '0');
+            <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '1';
+            <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+            <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+              <B>for</B> j <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+                <FONT COLOR=#804040>MsgBlkxDN</FONT>(7-j)((8*(i+1)-1) <B>downto</B> (8*i)) <= <FONT COLOR=#804040>BlockxDI</FONT>((j*64)+(8*(8-i)-1) <B>downto</B> (j*64)+(8*(7-i)));
+              <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>--i</FONT></I>
+            <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+            <FONT COLOR=#804040>ByteCntxDN</FONT> <= unsigned(<FONT COLOR=#804040>MsgLenxDI</FONT>);
+          <B>else</B>
+            <FONT COLOR=#1E90FF>RoundxSN</FONT> <= <FONT COLOR=#1E90FF>RoundxSP</FONT>;
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>  <= '1';
+          <B>end</B> <B>if</B>;
+          
+        <B>end</B> <B>if</B>;
+
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------</FONT></I>
+        <I><FONT COLOR=#808080>-- Final</FONT></I>
+        <I><FONT COLOR=#808080>-------------------------------------------------------------------------  </FONT></I>
+      <B>when</B> final =>
+        <FONT COLOR=#1E90FF>FrstBlkxSN</FONT> <= <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>;
+        <FONT COLOR=#1E90FF>FinalizexS</FONT> <= '1';
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 0 <B>and</B> <FONT COLOR=#1E90FF>KeyUpdxSP</FONT> = '1' <B>then</B>
+          <FONT COLOR=#1E90FF>KeyAddxSN</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "10" <B>then</B>
+          <FONT COLOR=#1E90FF>KeyUpdxSN</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>KeyAddxSP</FONT> = '0' <B>and</B> <FONT COLOR=#1E90FF>WaitxSP</FONT> = '0'<B>then</B>
+          <FONT COLOR=#1E90FF>RoundxSN</FONT> <= <FONT COLOR=#1E90FF>RoundxSP</FONT> +1;
+          <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT>(1 <B>downto</B> 0) = "11" <B>then</B>
+            <FONT COLOR=#1E90FF>KeyAddxSN</FONT> <= '1';
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 71 <B>then</B>
+          <FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1';
+        <B>end</B> <B>if</B>;
+
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 72 <B>then</B>
+          <FONT COLOR=#1E90FF>OutWrEnxSN</FONT> <= '1';
+          <B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT> = '1' <B>then</B>
+            <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+              <B>for</B> j <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+                <FONT COLOR=#804040>MsgBlkxDN</FONT>(7-j)((8*(i+1)-1) <B>downto</B> (8*i)) <= <FONT COLOR=#804040>BlockxDI</FONT>((j*64)+(8*(8-i)-1) <B>downto</B> (j*64)+(8*(7-i)));
+              <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>--i</FONT></I>
+            <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+            <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>   <= '1';
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= first;
+            <FONT COLOR=#1E90FF>FinBlockxSN</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSI</FONT>;
+            <FONT COLOR=#1E90FF>KeyAddxSN</FONT>   <= '1';
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '0';
+            <FONT COLOR=#1E90FF>RoundxSN</FONT>    <= (<B>others</B> => '0');
+            <FONT COLOR=#804040>ByteCntxDN</FONT>  <= unsigned(<FONT COLOR=#804040>MsgLenxDI</FONT>);
+          <B>else</B>
+            <FONT COLOR=#804040>FSMStatexDN</FONT> <= idle;
+            <FONT COLOR=#1E90FF>WaitxSN</FONT>     <= '1';
+          <B>end</B> <B>if</B>;
+        <B>end</B> <B>if</B>;
+      <B>when</B> <B>others</B> => null;
+    <B>end</B> <B>case</B>;
+
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>FSM</FONT>;
+
+
+
+
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <I><FONT COLOR=#808080>-- Key Management</FONT></I>
+  <I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>KeyMan</FONT> : <B>process</B> (<FONT COLOR=#804040>ByteCntxDP</FONT>, <FONT COLOR=#1E90FF>FinBlockxSP</FONT>, <FONT COLOR=#1E90FF>FinalizexS</FONT>, <FONT COLOR=#1E90FF>FrstBlkxS</FONT>, <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>,
+                    <FONT COLOR=#1E90FF>KeyUpdxSP</FONT>, <FONT COLOR=#804040>KeyxDN</FONT>, <FONT COLOR=#804040>KeyxDP</FONT>, <FONT COLOR=#804040>MsgBlkxDP</FONT>, <FONT COLOR=#1E90FF>RoundxSP</FONT>, <FONT COLOR=#804040>StatexDP</FONT>,
+                    <FONT COLOR=#804040>TweakxDN</FONT>, <FONT COLOR=#804040>TweakxDP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process KeyMan</FONT></I>
+    <FONT COLOR=#804040>TweakxDN</FONT> <= <FONT COLOR=#804040>TweakxDP</FONT>;
+    <FONT COLOR=#804040>KeyxDN</FONT>   <= <FONT COLOR=#804040>KeyxDP</FONT>;
+
+
+    <B>if</B> <FONT COLOR=#1E90FF>KeyUpdxSP</FONT> = '1' <B>then</B>
+      <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 0 <B>or</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 72 <B>then</B>
+        <B>if</B> <FONT COLOR=#1E90FF>FrstBlkxS</FONT> = '1' <B>then</B>
+          <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+            <FONT COLOR=#804040>KeyxDN</FONT>(i) <= IV(i);
+          <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+        <B>else</B>
+          <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+            <FONT COLOR=#804040>KeyxDN</FONT>(i) <= <FONT COLOR=#804040>StatexDP</FONT>(i);
+          <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i          </FONT></I>
+        <B>end</B> <B>if</B>;  <I><FONT COLOR=#808080>-- FrstBlkxS</FONT></I>
+        <FONT COLOR=#804040>KeyxDN</FONT>(8) <= C240 <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(0) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(1) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(2) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(3) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(4) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(5) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(6) <B>xor</B> <FONT COLOR=#804040>KeyxDN</FONT>(7);
+        <B>if</B> <FONT COLOR=#1E90FF>FinalizexS</FONT> = '0' <B>then</B>
+          <FONT COLOR=#804040>TweakxDN</FONT>(1) <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT> & <FONT COLOR=#1E90FF>FrstBlkxS</FONT> & "110000" &X"00000000000000";
+          <FONT COLOR=#804040>TweakxDN</FONT>(0) <= std_logic_vector(<FONT COLOR=#804040>ByteCntxDP</FONT>);
+        <B>else</B>
+          <FONT COLOR=#804040>TweakxDN</FONT>(1) <= <FONT COLOR=#1E90FF>FinBlockxSP</FONT> & <FONT COLOR=#1E90FF>FrstBlkxSP</FONT> & "111111" &X"00000000000000";
+          <FONT COLOR=#804040>TweakxDN</FONT>(0) <= X"000000000000000" & "1000";
+        <B>end</B> <B>if</B>;
+        <FONT COLOR=#804040>TweakxDN</FONT>(2) <= <FONT COLOR=#804040>TweakxDN</FONT>(0) <B>xor</B> <FONT COLOR=#804040>TweakxDN</FONT>(1);
+      <B>else</B>
+        <FONT COLOR=#804040>TweakxDN</FONT>(0) <= <FONT COLOR=#804040>TweakxDP</FONT>(1);
+        <FONT COLOR=#804040>TweakxDN</FONT>(1) <= <FONT COLOR=#804040>TweakxDP</FONT>(2);
+        <FONT COLOR=#804040>TweakxDN</FONT>(2) <= <FONT COLOR=#804040>TweakxDP</FONT>(0);
+
+        <FONT COLOR=#804040>KeyxDN</FONT>(0) <= <FONT COLOR=#804040>KeyxDP</FONT>(1);
+        <FONT COLOR=#804040>KeyxDN</FONT>(1) <= <FONT COLOR=#804040>KeyxDP</FONT>(2);
+        <FONT COLOR=#804040>KeyxDN</FONT>(2) <= <FONT COLOR=#804040>KeyxDP</FONT>(3);
+        <FONT COLOR=#804040>KeyxDN</FONT>(3) <= <FONT COLOR=#804040>KeyxDP</FONT>(4);
+        <FONT COLOR=#804040>KeyxDN</FONT>(4) <= <FONT COLOR=#804040>KeyxDP</FONT>(5);
+        <FONT COLOR=#804040>KeyxDN</FONT>(5) <= <FONT COLOR=#804040>KeyxDP</FONT>(6);
+        <FONT COLOR=#804040>KeyxDN</FONT>(6) <= <FONT COLOR=#804040>KeyxDP</FONT>(7);
+        <FONT COLOR=#804040>KeyxDN</FONT>(7) <= <FONT COLOR=#804040>KeyxDP</FONT>(8);
+        <FONT COLOR=#804040>KeyxDN</FONT>(8) <= <FONT COLOR=#804040>KeyxDP</FONT>(0);
+      <B>end</B> <B>if</B>;  <I><FONT COLOR=#808080>--FrstRndxS</FONT></I>
+
+    <B>end</B> <B>if</B>;
+
+    <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+      <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> = 0 <B>then</B>
+        <B>if</B> i = 5 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(0)));
+        <B>elsif</B> i = 6 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(1)));
+        <B>elsif</B> i = 7 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+<FONT COLOR=#1E90FF>RoundxSP</FONT>(6 <B>downto</B> 2));
+        <B>else</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i)));
+        <B>end</B> <B>if</B>;
+      <B>elsif</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> < 72 <B>then</B>
+        <B>if</B> i = 5 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(0)));
+        <B>elsif</B> i = 6 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(1)));
+        <B>elsif</B> i = 7 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+<FONT COLOR=#1E90FF>RoundxSP</FONT>(6 <B>downto</B> 2));
+        <B>else</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector(unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i)));
+        <B>end</B> <B>if</B>;
+      <B>else</B>
+        <B>if</B> i = 5 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector((unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(0))) <B>xor</B> unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)));
+        <B>elsif</B> i = 6 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector((unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+unsigned(<FONT COLOR=#804040>TweakxDN</FONT>(1))) <B>xor</B> unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)));
+        <B>elsif</B> i = 7 <B>then</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector((unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))+<FONT COLOR=#1E90FF>RoundxSP</FONT>(6 <B>downto</B> 2)) <B>xor</B> unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)));
+        <B>else</B>
+          <FONT COLOR=#804040>StateTmpxD</FONT>(i) <= std_logic_vector((unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i)) + unsigned(<FONT COLOR=#804040>KeyxDN</FONT>(i))) <B>xor</B> unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i)));
+        <B>end</B> <B>if</B>;
+      <B>end</B> <B>if</B>;
+      
+    <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>KeyMan</FONT>;
+
+
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- MixRound</FONT></I>
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>Mixround</FONT> : <B>process</B> (<FONT COLOR=#1E90FF>KeyAddxSP</FONT>, <FONT COLOR=#804040>MsgBlkxDP</FONT>, <FONT COLOR=#1E90FF>RoundxSP</FONT>, <FONT COLOR=#804040>StateTmpxD</FONT>, <FONT COLOR=#804040>StatexDP</FONT>,
+                      <FONT COLOR=#804040>TmpStatexDN</FONT>, <FONT COLOR=#804040>TmpStatexDP</FONT>, <FONT COLOR=#1E90FF>WaitxSP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process MixRound</FONT></I>
+    Debug <= 0;
+
+    <B>if</B> <FONT COLOR=#1E90FF>WaitxSP</FONT> = '0' <B>then</B>
+      <B>if</B> <FONT COLOR=#1E90FF>KeyAddxSP</FONT> = '0' <B>then</B>
+        <B>if</B> <FONT COLOR=#1E90FF>RoundxSP</FONT> < 72 <B>then</B>
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(6) <= <FONT COLOR=#804040>TmpStatexDP</FONT>(0)+ <FONT COLOR=#804040>TmpStatexDP</FONT>(1);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(1) <= (<FONT COLOR=#804040>TmpStatexDP</FONT>(1) <B>rol</B> <FONT COLOR=#1E90FF>RotxS</FONT>(to_integer(<FONT COLOR=#1E90FF>RoundxSP</FONT>(2 <B>downto</B> 0)))(0)) <B>xor</B> <FONT COLOR=#804040>TmpStatexDN</FONT>(6);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(0) <= <FONT COLOR=#804040>TmpStatexDP</FONT>(2)+ <FONT COLOR=#804040>TmpStatexDP</FONT>(3);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(7) <= (<FONT COLOR=#804040>TmpStatexDP</FONT>(3) <B>rol</B> <FONT COLOR=#1E90FF>RotxS</FONT>(to_integer(<FONT COLOR=#1E90FF>RoundxSP</FONT>(2 <B>downto</B> 0)))(1)) <B>xor</B> <FONT COLOR=#804040>TmpStatexDN</FONT>(0);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(2) <= <FONT COLOR=#804040>TmpStatexDP</FONT>(4)+ <FONT COLOR=#804040>TmpStatexDP</FONT>(5);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(5) <= (<FONT COLOR=#804040>TmpStatexDP</FONT>(5) <B>rol</B> <FONT COLOR=#1E90FF>RotxS</FONT>(to_integer(<FONT COLOR=#1E90FF>RoundxSP</FONT>(2 <B>downto</B> 0)))(2)) <B>xor</B> <FONT COLOR=#804040>TmpStatexDN</FONT>(2);
+          Debug          <= <FONT COLOR=#1E90FF>RotxS</FONT>(to_integer(<FONT COLOR=#1E90FF>RoundxSP</FONT>(2 <B>downto</B> 0)))(2);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(4) <= <FONT COLOR=#804040>TmpStatexDP</FONT>(6)+ <FONT COLOR=#804040>TmpStatexDP</FONT>(7);
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(3) <= (<FONT COLOR=#804040>TmpStatexDP</FONT>(7) <B>rol</B> <FONT COLOR=#1E90FF>RotxS</FONT>(to_integer(<FONT COLOR=#1E90FF>RoundxSP</FONT>(2 <B>downto</B> 0)))(3)) <B>xor</B> <FONT COLOR=#804040>TmpStatexDN</FONT>(4);
+          
+        <B>else</B>
+          <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+            <FONT COLOR=#804040>TmpStatexDN</FONT>(i) <= unsigned(<FONT COLOR=#804040>StateTmpxD</FONT>(i)) <B>xor</B> unsigned(<FONT COLOR=#804040>MsgBlkxDP</FONT>(i));
+          <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+        <B>end</B> <B>if</B>;  <I><FONT COLOR=#808080>-- round < 72</FONT></I>
+      <B>else</B>
+        <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+          <FONT COLOR=#804040>TmpStatexDN</FONT>(i) <= unsigned(<FONT COLOR=#804040>StateTmpxD</FONT>(i));
+        <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i      </FONT></I>
+      <B>end</B> <B>if</B>;  <I><FONT COLOR=#808080>--keyadd</FONT></I>
+    <B>else</B>
+      <FONT COLOR=#804040>TmpStatexDN</FONT> <= <FONT COLOR=#804040>TmpStatexDP</FONT>;
+    <B>end</B> <B>if</B>;  <I><FONT COLOR=#808080>-- wait</FONT></I>
+
+    <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+      <FONT COLOR=#804040>TmpStatexDP</FONT>(i) <= unsigned(<FONT COLOR=#804040>StatexDP</FONT>(i));
+      <FONT COLOR=#804040>StatexDN</FONT>(i)    <= std_logic_vector(<FONT COLOR=#804040>TmpStatexDN</FONT>(i));
+    <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+    
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>Mixround</FONT>;
+
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- Output Process</FONT></I>
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>Output</FONT> : <B>process</B> (<FONT COLOR=#804040>StatexDP</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process Output</FONT></I>
+    <B>for</B> i <B>in</B> 0 <B>to</B> 7 <B>loop</B>
+      <B>for</B> j <B>in</B> 0 <B>to</B> 3 <B>loop</B>
+        <FONT COLOR=#804040>HashxDO</FONT>((j*64)+(8*(i+1)-1) <B>downto</B> (j*64)+(8*i)) <= <FONT COLOR=#804040>StatexDP</FONT>(3-j)((8*(8-i)-1) <B>downto</B> (8*(7-i)));
+      <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>--i</FONT></I>
+    <B>end</B> <B>loop</B>;  <I><FONT COLOR=#808080>-- i</FONT></I>
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>Output</FONT>;
+
+
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- register</FONT></I>
+<I><FONT COLOR=#808080>-----------------------------------------------------------------------------</FONT></I>
+  <FONT COLOR=#0000C0>P_Reg</FONT> : <B>process</B> (<FONT COLOR=#32CD32>ClkxCI</FONT>, <FONT COLOR=#FF6347>RstxRBI</FONT>)
+  <B>begin</B>  <I><FONT COLOR=#808080>-- process Register</FONT></I>
+    <B>if</B> <FONT COLOR=#FF6347>RstxRBI</FONT> = '0' <B>then</B>               <I><FONT COLOR=#808080>-- asynchronous reset (active low)</FONT></I>
+      <FONT COLOR=#804040>FSMStatexDP</FONT> <= idle;
+      <FONT COLOR=#804040>StatexDP</FONT>    <= (<B>others</B> => (<B>others</B> => '0'));
+      <FONT COLOR=#804040>MsgBlkxDP</FONT>   <= (<B>others</B> => (<B>others</B> => '0'));
+      <FONT COLOR=#804040>KeyxDP</FONT>      <= (<B>others</B> => (<B>others</B> => '0'));
+      <FONT COLOR=#804040>TweakxDP</FONT>    <= (<B>others</B> => (<B>others</B> => '0'));
+      <FONT COLOR=#804040>ByteCntxDP</FONT>  <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>RoundxSP</FONT>    <= (<B>others</B> => '0');
+      RoundxSPP   <= (<B>others</B> => '0');
+      <FONT COLOR=#1E90FF>WaitxSP</FONT>     <= '0';
+      <FONT COLOR=#1E90FF>KeyUpdxSP</FONT>   <= '0';
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= '0';
+      <FONT COLOR=#1E90FF>KeyAddxSP</FONT>   <= '0';
+      <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>  <= '0';
+      <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>  <= '0';
+    <B>elsif</B> <FONT COLOR=#32CD32>ClkxCI</FONT>'<B><I>event</I></B> <B>and</B> <FONT COLOR=#32CD32>ClkxCI</FONT> = '1' <B>then</B>  <I><FONT COLOR=#808080>-- rising clock edge</FONT></I>
+      <FONT COLOR=#804040>FSMStatexDP</FONT> <= <FONT COLOR=#804040>FSMStatexDN</FONT>;
+      <FONT COLOR=#804040>StatexDP</FONT>    <= <FONT COLOR=#804040>StatexDN</FONT>;
+      <FONT COLOR=#804040>MsgBlkxDP</FONT>   <= <FONT COLOR=#804040>MsgBlkxDN</FONT>;
+      <FONT COLOR=#804040>KeyxDP</FONT>      <= <FONT COLOR=#804040>KeyxDN</FONT>;
+      <FONT COLOR=#804040>TweakxDP</FONT>    <= <FONT COLOR=#804040>TweakxDN</FONT>;
+      <FONT COLOR=#804040>ByteCntxDP</FONT>  <= <FONT COLOR=#804040>ByteCntxDN</FONT>;
+      <FONT COLOR=#1E90FF>RoundxSP</FONT>    <= <FONT COLOR=#1E90FF>RoundxSN</FONT>;
+      RoundxSPP   <= <FONT COLOR=#1E90FF>RoundxSP</FONT>;
+      <FONT COLOR=#1E90FF>WaitxSP</FONT>     <= <FONT COLOR=#1E90FF>WaitxSN</FONT>;
+      <FONT COLOR=#1E90FF>KeyUpdxSP</FONT>   <= <FONT COLOR=#1E90FF>KeyUpdxSN</FONT>;
+      <FONT COLOR=#1E90FF>FinBlockxSP</FONT> <= <FONT COLOR=#1E90FF>FinBlockxSN</FONT>;
+      <FONT COLOR=#1E90FF>KeyAddxSP</FONT>   <= <FONT COLOR=#1E90FF>KeyAddxSN</FONT>;
+      <FONT COLOR=#1E90FF>OutWrEnxSP</FONT>  <= <FONT COLOR=#1E90FF>OutWrEnxSN</FONT>;
+      <FONT COLOR=#1E90FF>FrstBlkxSP</FONT>  <= <FONT COLOR=#1E90FF>FrstBlkxSN</FONT>;
+    <B>end</B> <B>if</B>;
+  <B>end</B> <B>process</B> <FONT COLOR=#0000C0>P_Reg</FONT>;
+
+
+<B>end</B> rtl;
+
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>

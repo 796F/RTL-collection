@@ -1,0 +1,165 @@
+<HTML>
+<TITLE>
+ gmu_blake/sourcecode/gmu_blake_control.vhd
+</TITLE>
+<BODY>
+<PRE>
+<I><FONT COLOR=#808080>------------------------------------------------------------
+-- Copyright: 2011 George Mason University, Virginia USA
+--            http://www.iis.ee.ethz.ch/~sha3
+------------------------------------------------------------</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+<I><FONT COLOR=#808080>-- Copyright © 2010-2011 by Cryptographic Engineering Research Group (CERG),</FONT></I>
+<I><FONT COLOR=#808080>-- ECE Department, George Mason University</FONT></I>
+<I><FONT COLOR=#808080>-- Fairfax, VA, U.S.A.</FONT></I>
+<I><FONT COLOR=#808080>-- =====================================================================</FONT></I>
+
+<B>library</B> ieee;
+<B>use</B> ieee.std_logic_1164.all;
+<B>use</B> ieee.std_logic_unsigned.all; 
+<B>use</B> work.sha3_pkg.all;
+<B>use</B> work.sha3_blake_package.all;
+
+<B>entity</B> gmu_blake_control <B>is</B>		 
+	<B>generic</B> (
+		RST_ACTIVE_VALUE : std_logic := '0' );
+	<B>port</B> (					
+		rst			: <B>in</B> std_logic;
+		clk			: <B>in</B> std_logic;
+		
+		round		: <B>out</B> std_logic_vector(4 <B>downto</B> 0);
+		er			: <B>out</B> std_logic; <I><FONT COLOR=#808080>-- enable signal for state register</FONT></I>
+		em			: <B>out</B> std_logic; <I><FONT COLOR=#808080>-- enable signal for register between the permute and round unit</FONT></I>
+		eh			: <B>out</B> std_logic; <I><FONT COLOR=#808080>-- enable signal for intermediate hash register</FONT></I>
+		sf		    : <B>out</B> std_logic; <I><FONT COLOR=#808080>-- select signal for first block (IV selection)</FONT></I>
+		lm			: <B>out</B> std_logic; <I><FONT COLOR=#808080>-- load message for message register</FONT></I>
+		
+		<FONT COLOR=#1E90FF>InWrEnxSI</FONT> 		: <B>in</B> std_logic;
+		<FONT COLOR=#1E90FF>FinBlockxSI</FONT>	: <B>in</B> std_logic;
+		
+		<FONT COLOR=#1E90FF>OutWrEnxSO</FONT>	: <B>out</B> std_logic;
+		<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> : <B>out</B> std_logic		
+	);				 
+<B>end</B> gmu_blake_control;
+
+<B>architecture</B> beh <B>of</B> gmu_blake_control <B>is</B>
+	<B>type</B> stateType <B>is</B> ( initState, idleState, prepMsgState, hashDataState, penultimateState, finalState );
+	<B>signal</B> cstate, nstate : stateType;
+	
+	<B>signal</B> lastBlockFlag, lastBlockSet, lastBlockClr : std_logic;
+	<B>signal</B> msgReadyFlag, msgReadySet, msgReadyClr : std_logic;
+	
+	<B>signal</B> roundCtr : std_logic_vector(4 <B>downto</B> 0);
+	<B>signal</B> loadRoundCtr, incRoundCtr : std_logic;
+	
+	<B>signal</B> processDoneComp : std_logic;
+	
+	<B>signal</B> sfSet, sfClr, sfFlag : std_logic;
+	<B>signal</B> nextBlockIsLastSet, nextBlockIsLastClr, nextBlockIsLastFlag : std_logic;
+	
+	<B>signal</B> enableRegCtrl : std_logic;
+<B>begin</B>											   
+	roundCtrGen:
+		<B>process</B>( rst, clk )
+		<B>begin</B>
+			<B>if</B> (rst = RST_ACTIVE_VALUE) <B>then</B>
+				roundCtr <= (<B>others</B> => '0');
+			<B>elsif</B> rising_edge( clk ) <B>then</B>
+				<B>if</B> loadRoundCtr = '1' <B>then</B>
+					roundCtr <= (<B>others</B> => '0');					
+				<B>elsif</B> incRoundCtr = '1' <B>then</B>
+					roundCtr <= roundCtr + 1;
+				<B>end</B> <B>if</B>;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;	
+	incRoundCtr <= '1' <B>when</B> (cstate = prepMsgState <B>or</B> cstate = hashDataState <B>or</B> (cstate = finalState <B>and</B> msgReadyFlag = '1')) <B>else</B> '0';
+	<I><FONT COLOR=#808080>--incRoundCtr when (cstate = hashDataState or (cstate = finalState and msgReadyFlag = '1')) else '0';</FONT></I>
+	loadRoundCtr <= '1' <B>when</B> (cstate = penultimateState <B>or</B> cstate = initState) <B>else</B> '0';	
+	processDoneComp <= '1' <B>when</B> roundCtr = 27 <B>else</B> '0';
+
+	stateReg:
+		<B>process</B>( rst, clk )
+		<B>begin</B>
+			<B>if</B> (rst = RST_ACTIVE_VALUE) <B>then</B>
+				cstate <= initState;
+			<B>elsif</B> rising_edge( clk ) <B>then</B>
+				cstate <= nstate;
+			<B>end</B> <B>if</B>;
+		<B>end</B> <B>process</B>;
+	
+	nextStateComb:
+		<B>process</B>( cstate, <FONT COLOR=#1E90FF>InWrEnxSI</FONT> , processDoneComp, lastBlockFlag, msgReadyFlag )
+		<B>begin</B>																				
+			<B>case</B> cstate <B>is</B>
+				<B>when</B> initState =>
+					nstate <= idleState;
+				<B>when</B> idleState =>
+					<B>if</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT>  = '1' <B>then</B>
+						nstate <= prepMsgState;
+					<B>else</B>
+						nstate <= idleState;
+					<B>end</B> <B>if</B>;
+				<B>when</B> prepMsgState =>
+					nstate <= hashDataState;
+				<B>when</B> hashDataState =>
+					<B>if</B> processDoneComp = '1' <B>then</B>
+						nstate <= penultimateState;
+					<B>else</B>
+						nstate <= hashDataState;
+					<B>end</B> <B>if</B>;
+				<B>when</B> penultimateState =>
+				   	nstate <= finalState;
+				<B>when</B> finalState =>
+					<B>if</B> lastBlockFlag = '1' <B>then</B>
+						nstate <= idleState;
+					<B>elsif</B> msgReadyFlag = '1' <B>then</B>
+						nstate <= hashDataState;
+					<B>elsif</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT>  = '1' <B>then</B>
+						nstate <= prepMsgState;					
+					<B>else</B>
+						nstate <= finalState; 
+					<B>end</B> <B>if</B>;
+			<B>end</B> <B>case</B>;
+		<B>end</B> <B>process</B>;
+	
+	msgReadyInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => msgReadySet, clr => msgReadyClr, output => msgReadyFlag );
+	msgReadySet <= '1' <B>when</B> (cstate = penultimateState <B>and</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT>  = '1' <B>and</B> lastBlockFlag = '0') <B>else</B> '0';
+	msgReadyClr <= '1' <B>when</B> (cstate = finalState) <B>else</B> '0';
+				
+	nextBlockIsLastInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => nextBlockIsLastSet, clr => nextBlockIsLastClr, output => nextBlockIsLastFlag );
+	nextBlockIsLastSet <= '1' <B>when</B> (cstate = penultimateState) <B>and</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT> = '1') <B>else</B> '0';
+	nextBlockIsLastClr <= '1' <B>when</B> (cstate = penultimateState <B>and</B> nextBlockIsLastFlag = '1') <B>else</B> '0';
+	
+	lastBlockInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => lastBlockSet, clr => lastBlockClr, output => lastBlockFlag );
+	lastBlockSet <= '1' <B>when</B> (cstate = finalState <B>or</B> cstate = idleState) <B>and</B> (<FONT COLOR=#1E90FF>FinBlockxSI</FONT> = '1' <B>or</B> nextBlockIsLastFlag = '1') <B>else</B> '0';
+	lastBlockClr <= '1' <B>when</B> (cstate = idleState) <B>else</B> '0';
+	<FONT COLOR=#1E90FF>OutWrEnxSO</FONT> <= '1' <B>when</B> (cstate = finalState <B>and</B> lastBlockFlag = '1') <B>else</B> '0';
+	
+	sfInst: 
+		<B>entity</B> work.sr_rega(struct) 
+		<B>port</B> <B>map</B> ( rst => rst, clk => clk, set => sfSet, clr => sfClr, output => sfFlag );
+	sfSet <= '1' <B>when</B> (cstate = idleState) <B>else</B> '0';
+	sfClr <= '1' <B>when</B> (cstate = prepMsgState) <B>else</B> '0';
+	
+	<I><FONT COLOR=#808080>-- Output</FONT></I>
+	enableRegCtrl <= '1' <B>when</B> (cstate = prepMsgState <B>or</B> cstate = hashDataState <B>or</B> cstate = penultimateState <B>or</B> (cstate = finalState <B>and</B> msgReadyFlag = '1')) <B>else</B> '0';
+	er <= enableRegCtrl;
+	em <= enableRegCtrl;
+	lm <= '1' <B>when</B> (cstate = idleState <B>or</B> cstate = penultimateState <B>or</B> (cstate = finalState <B>and</B> msgReadyFlag = '0')) <B>and</B> <FONT COLOR=#1E90FF>InWrEnxSI</FONT>  = '1' <B>else</B> '0';
+	eh <= '1' <B>when</B> (cstate = prepMsgState <B>or</B> (cstate = finalState <B>and</B> msgReadyFlag = '1')) <B>else</B> '0';	
+	sf <= sfFlag;
+	round <= roundCtr;
+	<FONT COLOR=#1E90FF>PenUltCyclexSO</FONT> <= '1' <B>when</B> (cstate = hashDataState <B>and</B> processDoneComp = '1' <B>and</B> lastBlockFlag = '0') <B>or</B> 
+								(cstate = finalState <B>and</B> lastblockFlag = '1') <B>else</B> '0';
+	
+<B>end</B> beh;
+</PRE></BODY>
+<HR>
+<FONT SIZE=-2> Generated on Tue Nov 22 15:16:34 CET 2011<BR><A HREF="/~sha3">Home</A></FONT>
+</HTML>
