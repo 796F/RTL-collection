@@ -13,3 +13,9 @@ https://cryptography.gmu.edu/athena/index.php?id=source_codes
 
 ### `/131002`
 http://www.131002.net/blake/
+
+### `/senseless`
+https://github.com/sprocket-fpga/FPGA_Mining_AWS
+
+### `/sprocket`
+https://github.com/sense-it/rtl
